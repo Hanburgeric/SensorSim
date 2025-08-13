@@ -9,7 +9,8 @@ public class UESensors : ModuleRules
 		PublicDependencyModuleNames.AddRange(
 			new string[]
 			{
-				"Core", "CoreUObject", "Engine"
+				"Core", "CoreUObject", "Engine",
+				"CinematicCamera", "CineCameraSceneCapture"
 			}
 		);
 	}
