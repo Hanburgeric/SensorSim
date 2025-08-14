@@ -9,158 +9,84 @@ DEFINE_LOG_CATEGORY(LogSemanticSegmentationCameraSensor);
 
 USemanticSegmentationCameraSensor::USemanticSegmentationCameraSensor()
 {
+	// TODO: disable irrelevant show flags for performance optimization
 }
 
 void USemanticSegmentationCameraSensor::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (CanSegmentImage())
+	// Check whether custom depth with stencil has been enabled in project settings
+	if (!IsCustomDepthWithStencilEnabled())
 	{
-		InitializeSemanticSegmentationComponents();
+		UE_LOG(
+			LogSemanticSegmentationCameraSensor, Warning,
+			TEXT("Custom depth with stencil is not enabled in project settings; ")
+			TEXT("camera will output a regular image.")
+		);
+	}
+	
+	// Create a 1D LUT using the provided semantic label data
+	if (AreSemanticLabelsValid())
+	{
+		SemanticLabelLUT = CreateLUTFromSemanticLabels();
+		check(SemanticLabelLUT);
 	}
 	else
 	{
 		UE_LOG(
 			LogSemanticSegmentationCameraSensor, Warning,
-			TEXT("Condition(s) for performing semantic segmentation")
-			TEXT("has/have not been met; the component will output a regular image.")
+			TEXT("Semantic label data is null or contains zero entries; ")
+			TEXT("segmentation material will use default texture and scalar parameters.")
 		);
 	}
-}
 
-bool USemanticSegmentationCameraSensor::CanSegmentImage() const
-{
-	return IsCustomDepthWithStencilEnabled() && AreSemanticLabelsValid() && IsBaseSegmentationMaterialValid();
+	// Create a dynamic instance of the post process segmentation material
+	if (IsBaseSegmentationMaterialValid())
+	{
+		SegmentationMaterial = CreateSegmentationMaterialFromBase();
+		check(SegmentationMaterial);
+
+		// Set the material's parameters using the LUT's properties
+		if (IsLUTValid())
+		{
+			SetSegmentationMaterialParameters();
+		}
+		else
+		{
+			UE_LOG(
+				LogSemanticSegmentationCameraSensor, Warning,
+				TEXT("Semantic label lookup texture is null or zero-width; ")
+				TEXT("segmentation material will use the default texture and scalar parmeters.")
+			);
+		}
+
+		// Add the segmentation material to the camera
+		CameraComponent->AddOrUpdateBlendable(SegmentationMaterial);
+	}
+	else
+	{
+		UE_LOG(
+			LogSemanticSegmentationCameraSensor, Warning,
+			TEXT("Base segmentation material is null or not a post process material; ")
+			TEXT("camera will output a regular image.")
+		);
+	}
 }
 
 bool USemanticSegmentationCameraSensor::IsCustomDepthWithStencilEnabled()
 {
-	if (GetCustomDepthMode() != ECustomDepthMode::EnabledWithStencil)
-	{
-		UE_LOG(
-			LogSemanticSegmentationCameraSensor, Warning,
-			TEXT("Custom depth with stencil is not enabled in project settings.")
-		);
-
-		return false;
-	}
-
-	return true;
+	return GetCustomDepthMode() == ECustomDepthMode::EnabledWithStencil;
 }
 
 bool USemanticSegmentationCameraSensor::AreSemanticLabelsValid() const
 {
-	if (!SemanticLabels)
-	{
-		UE_LOG(
-			LogSemanticSegmentationCameraSensor, Warning,
-			TEXT("No semantic label data asset was provided.")
-		);
-
-		return false;
-	}
-
-	// Disallow using a data asset with no entries, as this will result in
-	// attempting to create a LUT with invalid dimensions (i.e. 1x0)
-	if (SemanticLabels->SemanticLabels.IsEmpty())
-	{
-		UE_LOG(
-			LogSemanticSegmentationCameraSensor, Warning,
-			TEXT("Semantic label data asset \"%s\" was provided, but contains no data."),
-			*SemanticLabels->GetName()
-		);
-
-		return false;
-	}
-
-	return true;
-}
-
-bool USemanticSegmentationCameraSensor::IsBaseSegmentationMaterialValid() const
-{
-	if (!BaseSegmentationMaterial)
-	{
-		UE_LOG(
-			LogSemanticSegmentationCameraSensor, Warning,
-			TEXT("No base segmentation material was provided.")
-		);
-
-		return false;
-	}
-
-	// Make sure that the material is a post process material
-	if (!BaseSegmentationMaterial->IsPostProcessMaterial())
-	{
-		UE_LOG(
-			LogSemanticSegmentationCameraSensor, Warning,
-			TEXT("Base segmentation material \"%s\" was provided, ")
-			TEXT("but is not a post process material."),
-			*BaseSegmentationMaterial->GetName()
-		);
-
-		return false;
-	}
-
-	// Find a texture parameter with a name matching the one set in LUTParameterName
-	bool bFoundLUTParameter{
-		UMaterialUtils::DoesMaterialHaveParameter(
-			BaseSegmentationMaterial,
-			EMaterialParameterType::Texture,
-			LUTParameterName
-		)
-	};
-	if (!bFoundLUTParameter)
-	{
-		UE_LOG(
-			LogSemanticSegmentationCameraSensor, Warning,
-			TEXT("Base segmentation material \"%s\" was provided, ")
-			TEXT("but has no texture parameter named \"%s\"."),
-			*BaseSegmentationMaterial->GetName(),
-			*LUTParameterName.ToString()
-		);
-
-		return false;
-	}
-
-	// Find a scalar parameter with a name matching the one set in LUTInvWidthParameterName
-	bool bFoundLUTInvWidthParameter{
-		UMaterialUtils::DoesMaterialHaveParameter(
-			BaseSegmentationMaterial,
-			EMaterialParameterType::Scalar,
-			LUTInvWidthParameterName
-		)
-	};
-	if (!bFoundLUTInvWidthParameter)
-	{
-		UE_LOG(
-			LogSemanticSegmentationCameraSensor, Warning,
-			TEXT("Base segmentation material \"%s\" was provided, ")
-			TEXT("but has no scalar parameter named \"%s\"."),
-			*BaseSegmentationMaterial->GetName(),
-			*LUTInvWidthParameterName.ToString()
-		);
-
-		return false;
-	}
-
-	return true;
-}
-
-void USemanticSegmentationCameraSensor::InitializeSemanticSegmentationComponents()
-{
-	// Create a 1D LUT from the semantic labels
-	SemanticLabelLUT = CreateLUTFromSemanticLabels();
-
-	// Create a dynamic instance of the segmentation material
-	SegmentationMaterialInstance = CreateSegmentationMaterialInstance();
-
-	// Add the segmentation material to the camera
-	CameraComponent->AddOrUpdateBlendable(SegmentationMaterialInstance);
+	return SemanticLabels && !SemanticLabels->SemanticLabels.IsEmpty();
 }
 
 UTexture2D* USemanticSegmentationCameraSensor::CreateLUTFromSemanticLabels()
 {
+	// Create a new 2D texture
 	UTexture2D* LUT{ NewObject<UTexture2D>(this) };
 	check(LUT);
 
@@ -202,25 +128,82 @@ UTexture2D* USemanticSegmentationCameraSensor::CreateLUTFromSemanticLabels()
 	return LUT;
 }
 
-UMaterialInstanceDynamic* USemanticSegmentationCameraSensor::CreateSegmentationMaterialInstance()
+bool USemanticSegmentationCameraSensor::IsBaseSegmentationMaterialValid() const
 {
-	UMaterialInstanceDynamic* DynamicMaterialInstance{
+	return BaseSegmentationMaterial && BaseSegmentationMaterial->IsPostProcessMaterial();
+}
+
+UMaterialInstanceDynamic* USemanticSegmentationCameraSensor::CreateSegmentationMaterialFromBase()
+{
+	// Create a dynamic material instance using the base segmentation material
+	UMaterialInstanceDynamic* BaseMaterialInstance{
 		UMaterialInstanceDynamic::Create(
 			BaseSegmentationMaterial, this
 		)
 	};
-	check(DynamicMaterialInstance);
+	check(BaseMaterialInstance);
+
+	return BaseMaterialInstance;
+}
+
+bool USemanticSegmentationCameraSensor::IsLUTValid() const
+{
+	return SemanticLabelLUT && SemanticLabelLUT->GetSizeX() > 0;
+}
+
+void USemanticSegmentationCameraSensor::SetSegmentationMaterialParameters() const
+{
+	// Find a texture parameter with a name matching the one set in LUTParameterName
+	bool bFoundLUTParameter{
+		UMaterialUtils::DoesMaterialHaveParameter(
+			BaseSegmentationMaterial,
+			EMaterialParameterType::Texture,
+			LUTParameterName
+		)
+	};
 
 	// Set the texture parameter with the matching name to the LUT
-	SegmentationMaterialInstance->SetTextureParameterValue(
-		LUTParameterName, SemanticLabelLUT
-	);
+	if (bFoundLUTParameter)
+	{
+		SegmentationMaterial->SetTextureParameterValue(
+			LUTParameterName,
+			SemanticLabelLUT
+		);
+	}
+	else
+	{
+		UE_LOG(
+			LogSemanticSegmentationCameraSensor, Warning,
+			TEXT("Segmentation material has no texture parameter named \"%s\"; ")
+			TEXT("the default texture will be used."),
+			*LUTParameterName.ToString()
+		);
+	}
+	
+	// Find a scalar parameter with a name matching the one set in LUTInvWidthParameterName
+	bool bFoundLUTInvWidthParameter{
+		UMaterialUtils::DoesMaterialHaveParameter(
+			BaseSegmentationMaterial,
+			EMaterialParameterType::Scalar,
+			LUTInvWidthParameterName
+		)
+	};
 
 	// Set the scalar parameter with the matching name to the inverse of the LUT's width
-	SegmentationMaterialInstance->SetScalarParameterValue(
-		LUTInvWidthParameterName,
-		1.0F / static_cast<float>(SemanticLabels->SemanticLabels.Num())
-	);
-
-	return DynamicMaterialInstance;
+	if (bFoundLUTInvWidthParameter)
+	{
+		SegmentationMaterial->SetScalarParameterValue(
+			LUTInvWidthParameterName,
+			1.0F / static_cast<float>(SemanticLabels->SemanticLabels.Num())
+		);
+	}
+	else
+	{
+		UE_LOG(
+			LogSemanticSegmentationCameraSensor, Warning,
+			TEXT("Segmentation material has no scalar parameter named \"%s\"; ")
+			TEXT("the default value will be used."),
+			*LUTInvWidthParameterName.ToString()
+		);
+	}
 }

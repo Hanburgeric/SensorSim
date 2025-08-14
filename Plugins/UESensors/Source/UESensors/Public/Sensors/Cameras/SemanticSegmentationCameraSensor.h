@@ -21,14 +21,16 @@ protected:
 	virtual void BeginPlay() override;
 
 protected:
-	bool CanSegmentImage() const;
 	static bool IsCustomDepthWithStencilEnabled();
+	
 	bool AreSemanticLabelsValid() const;
-	bool IsBaseSegmentationMaterialValid() const;
-
-	void InitializeSemanticSegmentationComponents();
 	UTexture2D* CreateLUTFromSemanticLabels();
-	UMaterialInstanceDynamic* CreateSegmentationMaterialInstance();
+
+	bool IsBaseSegmentationMaterialValid() const;
+	UMaterialInstanceDynamic* CreateSegmentationMaterialFromBase();
+
+	bool IsLUTValid() const;
+	void SetSegmentationMaterialParameters() const;
 
 protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Semantic Segmentation")
@@ -47,5 +49,5 @@ protected:
 	FName LUTInvWidthParameterName{ TEXT("LUTInvWidth") };
 	
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Semantic Segmentation")
-	TObjectPtr<UMaterialInstanceDynamic> SegmentationMaterialInstance{ nullptr };
+	TObjectPtr<UMaterialInstanceDynamic> SegmentationMaterial{ nullptr };
 };
