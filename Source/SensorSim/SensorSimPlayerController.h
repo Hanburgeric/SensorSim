@@ -43,6 +43,7 @@ protected:
 	TSubclassOf<USensorSimUI> VehicleUIClass;
 
 	/** Pointer to the UI widget */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = UI)
 	TObjectPtr<USensorSimUI> VehicleUI;
 
 	
