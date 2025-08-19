@@ -1,4 +1,4 @@
-﻿#include "Sensors/Cameras/SemanticSegmentationCameraSensor.h"
+﻿#include "Sensors/Camera/SemanticSegmentationCameraSensor.h"
 
 // UESensors
 #include "CineCameraComponent.h"

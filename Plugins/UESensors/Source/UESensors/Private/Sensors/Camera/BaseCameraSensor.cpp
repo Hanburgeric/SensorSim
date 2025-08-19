@@ -1,4 +1,4 @@
-﻿#include "Sensors/Cameras/BaseCameraSensor.h"
+﻿#include "Sensors/Camera/BaseCameraSensor.h"
 
 // UE
 #include "CineCameraComponent.h"
