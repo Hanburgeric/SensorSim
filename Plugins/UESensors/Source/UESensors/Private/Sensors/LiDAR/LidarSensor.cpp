@@ -39,9 +39,9 @@ void ULidarSensor::PostEditChangeProperty(FPropertyChangedEvent& PropertyChanged
 			RebuildSampleDirections();
 		}
 
-		// By this point, the value of LidarStrategy has already changed;
-		// since SetLidarStrategy is not idempotent due to the early return, the callback is called directly
-		if (PropertyName == GET_MEMBER_NAME_CHECKED(ULidarSensor, LidarStrategy))
+		// By this point, the value of ScanMode has already changed;
+		// since SetScanMode is not idempotent due to the early return, the callback is called directly
+		if (PropertyName == GET_MEMBER_NAME_CHECKED(ULidarSensor, ScanMode))
 		{
 			ReinitializeStrategy();
 		}
@@ -143,31 +143,44 @@ const TArray<FVector>& ULidarSensor::GetSampleDirections() const
 	return SampleDirections;
 }
 
-ELidarStrategy ULidarSensor::GetLidarStrategy() const
+ELidarScanMode ULidarSensor::GetScanMode() const
 {
-	return LidarStrategy;
+	return ScanMode;
 }
 
-void ULidarSensor::SetLidarStrategy(ELidarStrategy NewLidarStrategy)
+void ULidarSensor::SetScanMode(ELidarScanMode NewScanMode)
 {
-	// Avoid doing unnecessary work if the strategy has not changed
-	if (LidarStrategy == NewLidarStrategy) { return; }
+	// Avoid doing unnecessary work if the mode has not changed
+	if (ScanMode == NewScanMode) { return; }
 
-	// Update the strategy
-	LidarStrategy = NewLidarStrategy;
+	// Update the mode
+	ScanMode = NewScanMode;
 
-	// Reinitialize the strategy if the BeginPlay has already been called
+	// Reinitialize the strategy if BeginPlay has already been called
 	if (HasBegunPlay())
 	{
 		ReinitializeStrategy();
 	}
 }
 
+const TArray<FLidarPoint>& ULidarSensor::GetScanData() const
+{
+	return ScanData;
+}
+
 void ULidarSensor::PerformScan_Implementation()
 {
 	if (Strategy)
 	{
-		Strategy->PerformScan();
+		ScanData = Strategy->PerformScan(*this);
+	}
+
+	if (const UWorld* World{ GetWorld() })
+	{
+		for (const FLidarPoint& Point : ScanData)
+		{
+			DrawDebugSphere(World, Point.XYZ, 1.0F, 4, Point.RGB);
+		}
 	}
 }
 
@@ -207,16 +220,16 @@ void ULidarSensor::ReinitializeStrategy()
 	// Cleanup the previous strategy
 	Strategy.Reset();
 
-	// Initialize the new strategy
-	switch (LidarStrategy)
+	// Initialize the new strategy according to the current scan mode
+	switch (ScanMode)
 	{
-	case ELidarStrategy::ParallelForLineTrace:
+	case ELidarScanMode::ParallelForLineTrace:
 	{
 		Strategy = MakeUnique<uesensors::lidar::ParallelForLineTraceStrategy>();
 		break;
 	}
 
-	case ELidarStrategy::ComputeShader:
+	case ELidarScanMode::ComputeShader:
 	{
 		Strategy = MakeUnique<uesensors::lidar::ComputeShaderStrategy>();
 		break;

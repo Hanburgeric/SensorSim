@@ -4,25 +4,42 @@
 #include "LidarStrategy.generated.h"
 
 UENUM(BlueprintType)
-enum class ELidarStrategy : uint8
+enum class ELidarScanMode : uint8
 {
 	ParallelForLineTrace	UMETA(DisplayName = "(CPU) ParallelFor + Line Trace"),
 	ComputeShader			UMETA(DisplayName = "(GPU) Compute Shader")
 };
 
+USTRUCT(BlueprintType)
+struct FLidarPoint
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FVector XYZ{ FVector::ZeroVector };
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float Intensity{ 0.0F };
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FColor RGB{ FColor::Black };
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bHit{ false };
+};
+
 // Forward declarations
-class FLidarPoint;
 class ULidarSensor;
 
 namespace uesensors {
 namespace lidar {
 	
-class IStrategy
+class Strategy
 {
 public:
-	virtual ~IStrategy() = default;
+	virtual ~Strategy() = default;
 
-	virtual void PerformScan() = 0;
+	virtual TArray<FLidarPoint> PerformScan(const ULidarSensor& LidarSensor) = 0;
 };
 
 } // namespace lidar

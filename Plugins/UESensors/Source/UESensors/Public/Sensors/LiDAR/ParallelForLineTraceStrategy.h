@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "Sensors/LiDAR/LidarStrategy.h"
@@ -8,11 +8,11 @@ class ULidarSensor;
 
 namespace uesensors {
 namespace lidar {
-	
-class ParallelForLineTraceStrategy final : public IStrategy
+
+class ParallelForLineTraceStrategy final : public Strategy
 {
 public:
-	void PerformScan() override;
+	TArray<FLidarPoint> PerformScan(const ULidarSensor& LidarSensor) override;
 };
 
 } // namespace lidar

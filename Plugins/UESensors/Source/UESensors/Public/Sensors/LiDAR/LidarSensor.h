@@ -53,10 +53,13 @@ public:
 	const TArray<FVector>& GetSampleDirections() const;
 
 	UFUNCTION(BlueprintCallable)
-	ELidarStrategy GetLidarStrategy() const;
+	ELidarScanMode GetScanMode() const;
 
 	UFUNCTION(BlueprintCallable)
-	void SetLidarStrategy(ELidarStrategy NewLidarStrategy);
+	void SetScanMode(ELidarScanMode NewScanMode);
+
+	UFUNCTION(BlueprintCallable)
+	const TArray<FLidarPoint>& GetScanData() const;
 
 protected:
 	virtual void PerformScan_Implementation() override;
@@ -93,8 +96,11 @@ private:
 	UPROPERTY(BlueprintGetter = "GetSampleDirections")
 	TArray<FVector> SampleDirections{};
 
-	UPROPERTY(EditAnywhere, BlueprintGetter = "GetLidarStrategy", BlueprintSetter = "SetLidarStrategy")
-	ELidarStrategy LidarStrategy{ ELidarStrategy::ParallelForLineTrace };
+	UPROPERTY(EditAnywhere, BlueprintGetter = "GetScanMode", BlueprintSetter = "SetScanMode")
+	ELidarScanMode ScanMode{ ELidarScanMode::ParallelForLineTrace };
 
-	TUniquePtr<uesensors::lidar::IStrategy> Strategy{ nullptr };
+	TUniquePtr<uesensors::lidar::Strategy> Strategy{ nullptr };
+
+	UPROPERTY(BlueprintGetter = "GetScanData")
+	TArray<FLidarPoint> ScanData{};
 };
