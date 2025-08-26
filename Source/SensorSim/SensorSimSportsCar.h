@@ -1,20 +1,21 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #pragma once
 
 #include "CoreMinimal.h"
 #include "SensorSimPawn.h"
 #include "SensorSimSportsCar.generated.h"
 
-/**
- *  Sports car wheeled vehicle implementation
- */
-UCLASS(abstract)
+// Forward declarations
+class ULidarSensor;
+
+UCLASS(Abstract)
 class SENSORSIM_API ASensorSimSportsCar : public ASensorSimPawn
 {
 	GENERATED_BODY()
 	
 public:
-
 	ASensorSimSportsCar();
+
+protected:
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	TObjectPtr<ULidarSensor> Lidar{ nullptr };
 };

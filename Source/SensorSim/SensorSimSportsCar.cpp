@@ -1,13 +1,17 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
-
 #include "SensorSimSportsCar.h"
 #include "SensorSimSportsWheelFront.h"
 #include "SensorSimSportsWheelRear.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
 
+// UESensors
+#include "Sensors/LiDAR/LidarSensor.h"
+
 ASensorSimSportsCar::ASensorSimSportsCar()
+	: Lidar{ CreateDefaultSubobject<ULidarSensor>(TEXT("LiDAR")) }
 {
+	// Attach the LiDAR sensor to the root component
+	Lidar->SetupAttachment(RootComponent);
+
 	// Note: for faster iteration times, the vehicle setup can be tweaked in the Blueprint instead
 
 	// Set up the chassis
