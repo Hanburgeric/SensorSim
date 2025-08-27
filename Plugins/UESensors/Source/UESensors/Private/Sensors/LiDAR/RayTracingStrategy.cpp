@@ -4,7 +4,9 @@
 #include "Sensors/LiDAR/LidarSensor.h"
 
 // UESensorShaders
-#include "UESensorShaders/Public/TestShader.h"
+#include "LiDAR/LidarRayGenShader.h"
+#include "LiDAR/LidarMissShader.h"
+#include "LiDAR/LidarClosestHitShader.h"
 
 namespace uesensors {
 namespace lidar {
@@ -13,12 +15,7 @@ TArray<FLidarPoint> RayTracingStrategy::ExecuteScan(const ULidarSensor& LidarSen
 {
     TArray<FLidarPoint> ScanResult;
 
-    // Test the shader
-    float TestInput = 5.0f;
-    float TestMultiplier = 3.0f;
-    float TestResult = FTestShaderRunner::Execute(TestInput, TestMultiplier);
-
-    UE_LOG(LogTemp, Warning, TEXT("RayTracingStrategy: Shader test result = %.2f"), TestResult);
+    // TODO: oh boy
 
     return ScanResult;
 }
