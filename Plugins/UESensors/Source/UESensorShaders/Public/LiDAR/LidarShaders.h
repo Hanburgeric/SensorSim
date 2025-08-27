@@ -4,7 +4,7 @@
 #include "ShaderParameterStruct.h"
 
 // Output data structure for the GPU, aligned to 32-bytes
-struct LidarPointAligned
+struct LidarPoint32Aligned
 {
 	FVector3f XYZ{ 0.0F, 0.0F, 0.0F };
 	float Intensity{ 0.0F };
@@ -23,7 +23,7 @@ BEGIN_SHADER_PARAMETER_STRUCT(FLidarShaderParameters, )
 	SHADER_PARAMETER(float, MinRange)
 	SHADER_PARAMETER(float, MaxRange)
 
-	SHADER_PARAMETER_UAV(RWStructuredBuffer<LidarPointAligned>, RTScanResults)
+	SHADER_PARAMETER_UAV(RWStructuredBuffer<LidarPoint32Aligned>, RTScanResults)
 END_SHADER_PARAMETER_STRUCT()
 
 // LiDAR ray generation shader

@@ -56,9 +56,10 @@ TArray<FLidarPoint> RayTracingStrategy::ExecuteScan(const ULidarSensor& LidarSen
 				Parameters->RTScanResults;
 
 				// Get LiDAR shaders
-				TShaderMapRef<FLidarRayGenShader> RayGenShader{ GetGlobalShaderMap(GMaxRHIFeatureLevel) };
-				TShaderMapRef<FLidarMissShader> MissShader{ GetGlobalShaderMap(GMaxRHIFeatureLevel) };
-				TShaderMapRef<FLidarClosestHitShader> ClosestHitShader{ GetGlobalShaderMap(GMaxRHIFeatureLevel) };
+				const FGlobalShaderMap* GlobalShaderMap{ GetGlobalShaderMap(GMaxRHIFeatureLevel) };
+				TShaderMapRef<FLidarRayGenShader> RayGenShader{ GlobalShaderMap };
+				TShaderMapRef<FLidarMissShader> MissShader{ GlobalShaderMap };
+				TShaderMapRef<FLidarClosestHitShader> ClosestHitShader{ GlobalShaderMap };
 				
 				GraphBuilder.Execute();
 			}
