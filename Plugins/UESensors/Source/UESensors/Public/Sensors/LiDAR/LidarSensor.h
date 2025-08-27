@@ -50,7 +50,7 @@ public:
 	void SetVerticalResolution(float NewVerticalResolution);
 
 	UFUNCTION(BlueprintCallable)
-	const TArray<FVector>& GetSampleDirections() const;
+	const TArray<FVector3f>& GetSampleDirections() const;
 
 	UFUNCTION(BlueprintCallable)
 	ELidarScanMode GetScanMode() const;
@@ -62,12 +62,11 @@ public:
 	const TArray<FLidarPoint>& GetScanData() const;
 
 protected:
-	virtual void PerformScan_Implementation() override;
+	virtual void ExecuteScan_Implementation() override;
 
 private:
 	void RebuildSampleDirections();
-
-	void ReinitializeStrategy();
+	void ReinitializeScanStrategy();
 
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
@@ -77,29 +76,25 @@ public:
 	float MaxRange{ 500000.0F };
 
 private:
-	UPROPERTY(EditAnywhere, BlueprintGetter = "GetHorizontalFieldOfView", BlueprintSetter = "SetHorizontalFieldOfView",
-		meta = (ClampMin = "0.0", ClampMax = "360.0"))
+	UPROPERTY(EditAnywhere, BlueprintGetter = "GetHorizontalFieldOfView", BlueprintSetter = "SetHorizontalFieldOfView", meta = (ClampMin = "0.0", ClampMax = "360.0"))
 	float HorizontalFieldOfView{ 90.0F };
 
-	UPROPERTY(EditAnywhere, BlueprintGetter = "GetHorizontalResolution", BlueprintSetter = "SetHorizontalResolution",
-		meta = (ClampMin = "0.01"))
+	UPROPERTY(EditAnywhere, BlueprintGetter = "GetHorizontalResolution", BlueprintSetter = "SetHorizontalResolution", meta = (ClampMin = "0.01"))
 	float HorizontalResolution{ 2.0F };
 
-	UPROPERTY(EditAnywhere, BlueprintGetter = "GetVerticalFieldOfView", BlueprintSetter = "SetVerticalFieldOfView",
-		meta = (ClampMin = "0.0", ClampMax = "360.0"))
+	UPROPERTY(EditAnywhere, BlueprintGetter = "GetVerticalFieldOfView", BlueprintSetter = "SetVerticalFieldOfView", meta = (ClampMin = "0.0", ClampMax = "360.0"))
 	float VerticalFieldOfView{ 45.0F };
 
-	UPROPERTY(EditAnywhere, BlueprintGetter = "GetVerticalResolution", BlueprintSetter = "SetVerticalResolution",
-		meta = (ClampMin = "0.01"))
+	UPROPERTY(EditAnywhere, BlueprintGetter = "GetVerticalResolution", BlueprintSetter = "SetVerticalResolution", meta = (ClampMin = "0.01"))
 	float VerticalResolution{ 1.0F };
 
 	UPROPERTY(BlueprintGetter = "GetSampleDirections")
-	TArray<FVector> SampleDirections{};
+	TArray<FVector3f> SampleDirections{};
 
 	UPROPERTY(EditAnywhere, BlueprintGetter = "GetScanMode", BlueprintSetter = "SetScanMode")
-	ELidarScanMode ScanMode{ ELidarScanMode::ParallelForLineTrace };
+	ELidarScanMode ScanMode{ ELidarScanMode::ParallelFor };
 
-	TUniquePtr<uesensors::lidar::Strategy> Strategy{ nullptr };
+	TUniquePtr<uesensors::lidar::Strategy> ScanStrategy{ nullptr };
 
 	UPROPERTY(BlueprintGetter = "GetScanData")
 	TArray<FLidarPoint> ScanData{};

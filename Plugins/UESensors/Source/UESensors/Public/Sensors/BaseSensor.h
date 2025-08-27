@@ -19,10 +19,7 @@ public:
 
 	virtual void BeginPlay() override;
 
-	virtual void TickComponent(float DeltaTime,
-		ELevelTick TickType,
-		FActorComponentTickFunction* ThisTickFunction
-	) override;
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 protected:
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
@@ -59,8 +56,8 @@ protected:
 	virtual void OnDisableSensor_Implementation();
 
 	UFUNCTION(BlueprintNativeEvent)
-	void PerformScan();
-	virtual void PerformScan_Implementation();
+	void ExecuteScan();
+	virtual void ExecuteScan_Implementation();
 
 public:
 	UPROPERTY(BlueprintAssignable)
@@ -70,12 +67,10 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintGetter = "GetSensorEnabled", BlueprintSetter = "SetSensorEnabled")
 	bool bSensorEnabled{ true };
 
-	UPROPERTY(EditAnywhere, BlueprintGetter = "GetScanFrequency", BlueprintSetter = "SetScanFrequency",
-		meta = (ClampMin = "0.01", ClampMax = "100.0"))
+	UPROPERTY(EditAnywhere, BlueprintGetter = "GetScanFrequency", BlueprintSetter = "SetScanFrequency", meta = (ClampMin = "0.01", ClampMax = "100.0"))
 	double ScanFrequency{ 1.0 };
 
-	UPROPERTY(EditAnywhere, BlueprintGetter = "GetScanPeriod", BlueprintSetter = "SetScanPeriod",
-		meta = (ClampMin = "0.01", ClampMax = "100.0"))
+	UPROPERTY(EditAnywhere, BlueprintGetter = "GetScanPeriod", BlueprintSetter = "SetScanPeriod", meta = (ClampMin = "0.01", ClampMax = "100.0"))
 	double ScanPeriod{ 1.0 };
 
 	UPROPERTY(VisibleAnywhere, BlueprintGetter = "GetNextScanTime")

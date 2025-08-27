@@ -40,7 +40,7 @@ void UBaseSensor::TickComponent(float DeltaTime, ELevelTick TickType, FActorComp
 			if (CurrentTime >= NextScanTime)
 			{
 				// Execute the scan; derived classes should implement this function
-				PerformScan();
+				ExecuteScan();
 
 				// Schedule the next scan
 				if (ScanPeriod > 0.0)
@@ -196,13 +196,13 @@ void UBaseSensor::OnDisableSensor_Implementation()
 	// override and implement this function
 }
 
-void UBaseSensor::PerformScan_Implementation()
+void UBaseSensor::ExecuteScan_Implementation()
 {
 	// Derived classes SHOULD implement this function; while not strictly enforced,
 	// warn the user if this is not the case, in case this decision is unintentional
 	UE_LOG(
 		LogBaseSensor, Warning,
-		TEXT("Sensor \"%s\" has not implemented the PerformScan function."),
+		TEXT("Sensor \"%s\" has not implemented the ExecuteScan function."),
 		*GetName()
 	)
 }

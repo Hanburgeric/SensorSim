@@ -2,8 +2,9 @@
 
 // UESensors
 #include "Sensors/LiDAR/LidarStrategy.h"
-#include "Sensors/LiDAR/ParallelForLineTraceStrategy.h"
+#include "Sensors/LiDAR/ParallelForStrategy.h"
 #include "Sensors/LiDAR/ComputeShaderStrategy.h"
+#include "Sensors/LiDAR/RayTracingStrategy.h"
 
 DEFINE_LOG_CATEGORY(LogLiDARSensor);
 
@@ -14,8 +15,8 @@ void ULidarSensor::BeginPlay()
 	// Initialize sample directions for the first time
 	RebuildSampleDirections();
 
-	// Initialize LiDAR strategy
-	ReinitializeStrategy();
+	// Initialize LiDAR scan strategy
+	ReinitializeScanStrategy();
 }
 
 void ULidarSensor::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
@@ -43,7 +44,7 @@ void ULidarSensor::PostEditChangeProperty(FPropertyChangedEvent& PropertyChanged
 		// since SetScanMode is not idempotent due to the early return, the callback is called directly
 		if (PropertyName == GET_MEMBER_NAME_CHECKED(ULidarSensor, ScanMode))
 		{
-			ReinitializeStrategy();
+			ReinitializeScanStrategy();
 		}
 	}
 }
@@ -138,7 +139,7 @@ void ULidarSensor::SetVerticalResolution(float NewVerticalResolution)
 	}
 }
 
-const TArray<FVector>& ULidarSensor::GetSampleDirections() const
+const TArray<FVector3f>& ULidarSensor::GetSampleDirections() const
 {
 	return SampleDirections;
 }
@@ -156,10 +157,10 @@ void ULidarSensor::SetScanMode(ELidarScanMode NewScanMode)
 	// Update the mode
 	ScanMode = NewScanMode;
 
-	// Reinitialize the strategy if BeginPlay has already been called
+	// Reinitialize the scan strategy if BeginPlay has already been called
 	if (HasBegunPlay())
 	{
-		ReinitializeStrategy();
+		ReinitializeScanStrategy();
 	}
 }
 
@@ -168,18 +169,20 @@ const TArray<FLidarPoint>& ULidarSensor::GetScanData() const
 	return ScanData;
 }
 
-void ULidarSensor::PerformScan_Implementation()
+void ULidarSensor::ExecuteScan_Implementation()
 {
-	if (Strategy)
+	// Allow the strategy defined by ScanMode to execute the actual LiDAR scan
+	if (ScanStrategy)
 	{
-		ScanData = Strategy->PerformScan(*this);
+		ScanData = ScanStrategy->ExecuteScan(*this);
 	}
 
+	// TEMPORARY: debug draw scan data as spheres
 	if (const UWorld* World{ GetWorld() })
 	{
 		for (const FLidarPoint& Point : ScanData)
 		{
-			DrawDebugSphere(World, Point.XYZ, 1.0F, 4, Point.RGB);
+			DrawDebugSphere(World, FVector{ Point.XYZ }, 1.0F, 4, Point.RGB);
 		}
 	}
 }
@@ -215,35 +218,67 @@ void ULidarSensor::RebuildSampleDirections()
 	}
 }
 
-void ULidarSensor::ReinitializeStrategy()
+void ULidarSensor::ReinitializeScanStrategy()
 {
-	// Cleanup the previous strategy
-	Strategy.Reset();
+	// Cleanup the previous scan strategy
+	ScanStrategy.Reset();
 
-	// Initialize the new strategy according to the current scan mode
+	// Initialize the new scan strategy according to the current scan mode
 	switch (ScanMode)
 	{
-	case ELidarScanMode::ParallelForLineTrace:
+	case ELidarScanMode::ParallelFor:
 	{
-		Strategy = MakeUnique<uesensors::lidar::ParallelForLineTraceStrategy>();
+		ScanStrategy = MakeUnique<uesensors::lidar::ParallelForStrategy>();
+		UE_LOG(LogLiDARSensor, Log, TEXT("Initialized ParallelFor scan strategy for LiDAR sensor \"%s\"."), *GetName());
+
 		break;
 	}
 
 	case ELidarScanMode::ComputeShader:
 	{
-		Strategy = MakeUnique<uesensors::lidar::ComputeShaderStrategy>();
+		if (false)	// Currently unimplemented
+		{
+			ScanStrategy = MakeUnique<uesensors::lidar::ComputeShaderStrategy>();
+			UE_LOG(LogLiDARSensor, Log, TEXT("Initialized ComputeShader scan strategy for LiDAR sensor \"%s\"."), *GetName());
+		}
+
+		else
+		{
+			UE_LOG(LogLiDARSensor, Warning, TEXT("Compute shaders not supported on hardware; falling back to ParallelFor scan strategy for LiDAR sensor \"%s\"."), *GetName());
+			ScanStrategy = MakeUnique<uesensors::lidar::ParallelForStrategy>();
+			ScanMode = ELidarScanMode::ParallelFor;
+		}
+
+		break;
+	}
+
+	case ELidarScanMode::RayTracing:
+	{
+		if (IsRayTracingEnabled())
+		{
+			ScanStrategy = MakeUnique<uesensors::lidar::RayTracingStrategy>();
+			UE_LOG(LogLiDARSensor, Log, TEXT("Initialized RayTracing scan strategy for LiDAR sensor \"%s\"."), *GetName());
+		}
+
+		else
+		{
+			UE_LOG(LogLiDARSensor, Warning, TEXT("Ray tracing not supported on hardware; falling back to ParallelFor scan strategy for LiDAR sensor \"%s\"."), *GetName());
+			ScanStrategy = MakeUnique<uesensors::lidar::ParallelForStrategy>();
+			ScanMode = ELidarScanMode::ParallelFor;
+		}
+
 		break;
 	}
 
 	// In the event of an invalid strategy, simply default to ParallelForLineTrace
 	default:
 	{
-		UE_LOG(LogLiDARSensor, Warning, TEXT("Invalid strategy selected; defaulting to ParallelFor + Line Trace"));
-		Strategy = MakeUnique<uesensors::lidar::ParallelForLineTraceStrategy>();
+		UE_LOG(LogLiDARSensor, Warning, TEXT("Invalid LiDAR scan strategy selected; falling back to ParallelFor scan strategy for LiDAR sensor \"%s\"."), *GetName());
+		ScanStrategy = MakeUnique<uesensors::lidar::ParallelForStrategy>();
 		break;
 	}
 	}
 
-	// Ensure that the strategy is valid
-	check(Strategy);
+	// Ensure that the initialized scan strategy is valid
+	check(ScanStrategy);
 }

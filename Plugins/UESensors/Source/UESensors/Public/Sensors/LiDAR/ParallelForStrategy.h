@@ -9,10 +9,10 @@ class ULidarSensor;
 namespace uesensors {
 namespace lidar {
 
-class ParallelForLineTraceStrategy final : public Strategy
+class ParallelForStrategy final : public Strategy
 {
 public:
-	TArray<FLidarPoint> PerformScan(const ULidarSensor& LidarSensor) override;
+	TArray<FLidarPoint> ExecuteScan(const ULidarSensor& LidarSensor) override;
 };
 
 } // namespace lidar

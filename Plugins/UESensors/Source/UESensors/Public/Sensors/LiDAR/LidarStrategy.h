@@ -6,8 +6,9 @@
 UENUM(BlueprintType)
 enum class ELidarScanMode : uint8
 {
-	ParallelForLineTrace	UMETA(DisplayName = "(CPU) ParallelFor + Line Trace"),
-	ComputeShader			UMETA(DisplayName = "(GPU) Compute Shader")
+	ParallelFor			UMETA(DisplayName = "(CPU) ParallelFor"),
+	ComputeShader		UMETA(DisplayName = "(GPU) Compute Shader"),
+	RayTracing			UMETA(DisplayName = "(GPU) Ray Tracing")
 };
 
 USTRUCT(BlueprintType)
@@ -16,7 +17,7 @@ struct FLidarPoint
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FVector XYZ{ FVector::ZeroVector };
+	FVector3f XYZ{ FVector3f::ZeroVector };
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	float Intensity{ 0.0F };
@@ -39,7 +40,7 @@ class Strategy
 public:
 	virtual ~Strategy() = default;
 
-	virtual TArray<FLidarPoint> PerformScan(const ULidarSensor& LidarSensor) = 0;
+	virtual TArray<FLidarPoint> ExecuteScan(const ULidarSensor& LidarSensor) = 0;
 };
 
 } // namespace lidar
