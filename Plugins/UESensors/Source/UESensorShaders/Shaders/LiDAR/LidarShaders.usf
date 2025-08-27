@@ -10,10 +10,19 @@ uint NumSamples;
 float MinRange;
 float MaxRange;
 
-// TODO: Output parameters
+// Output parameters
+struct LidarPointAligned
+{
+	float3 XYZ;
+	float Intensity;
+	uint RGB;
+	uint bHit;
+	uint2 Padding;
+};
+RWStructuredBuffer<LidarPointAligned> RTScanResults;
 
-// LiDAR point payload
-struct LidarPointPayload
+// Ray payload
+struct LidarPayload
 {
 	float3 XYZ;
 	float Intensity;
@@ -48,38 +57,55 @@ void LidarRayGen()
 	// Convert the sample direction from local space to world space
 	float3 WorldDirection = RotateVectorByQuaternion(LocalDirection, SensorRotation);
 
-	// Zero-initialize payload
-	FLidarPointPayload Payload;
-	Payload.XYZ = float3(0, 0, 0);
+	// Configure the ray
+	RayDesc Ray;
+	Ray.Origin = SensorLocation + WorldDirection * MinRange;
+	Ray.Direction = WorldDirection;
+	Ray.TMin = 0.0F;
+	Ray.TMax = MaxRange - MinRange;
+	
+	// Zero-initialize the payload
+	LidarPayload Payload;
+	Payload.XYZ = float3(0.0F, 0.0F, 0.0F);
 	Payload.Intensity = 0.0F;
-	Payload.RGB = 0U;
+	Payload.RGB = 0x00000000;
+	Payload.bHit = false;
 
 	// Trace ray
+	TraceRay(TLAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0U, 1U, 0U, Ray, Payload);
 
-	// Write payload content into output parameters
+	// Write results to output parameters
+	LidarPointAligned ScanResult;
+	ScanResult.XYZ = Payload.XYZ;
+	ScanResult.Intensity = Payload.Intensity;
+	ScanResult.RGB = Payload.RGB;
+	ScanResult.bHit = Payload.bHit ? 1U : 0U;
+	ScanResult.Padding = uint2(0U, 0U);
+	
+	RTScanResults[RayIndex] = ScanResult;
 }
 
 [shader("miss")]
-void LidarMiss(inout LidarPointPayload Payload)
+void LidarMiss(inout LidarPayload Payload)
 {
 	// Zero-initialize all values
-	Payload.XYZ = float3(0, 0, 0);
+	Payload.XYZ = float3(0.0F, 0.0F, 0.0F);
 	Payload.Intensity = 0.0F;
-	Payload.RGB = 0U;
+	Payload.RGB = 0x00000000;
 
-	// Mark the point as a miss such that it may later be discarded
-	Point.bHit = false;
+	// Mark the point as a miss such that it can later be discarded
+	Payload.bHit = false;
 }
 
 [shader("closesthit")]
-void LidarClosestHit(inout LidarPointPayload Payload, in BuiltInTriangleIntersectionAttributes Attributes)
+void LidarClosestHit(inout LidarPayload Payload, in BuiltInTriangleIntersectionAttributes Attributes)
 {
 	// Calculate the point of impact
 	Payload.XYZ = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
 
 	// TODO: actually calculate intensity and color
 	Payload.Intensity = 0.0F;
-	Payload.RGB = 0U;
+	Payload.RGB = 0x00000000;
 	
 	// Mark the point as a hit such that it is not discarded
 	Payload.bHit = true;

@@ -3,6 +3,16 @@
 #include "CoreMinimal.h"
 #include "ShaderParameterStruct.h"
 
+// Output data structure for the GPU, aligned to 32-bytes
+struct LidarPointAligned
+{
+	FVector3f XYZ{ 0.0F, 0.0F, 0.0F };
+	float Intensity{ 0.0F };
+	uint32 RGB{ 0x00000000 };
+	uint32 bHit{ 0U };
+	FUintVector2 Padding{ 0U, 0U };
+};
+
 // Parameter structure for LiDAR shaders
 BEGIN_SHADER_PARAMETER_STRUCT(FLidarShaderParameters, )
 	SHADER_PARAMETER_SRV(RaytracingAccelerationStructure, TLAS)
@@ -13,7 +23,7 @@ BEGIN_SHADER_PARAMETER_STRUCT(FLidarShaderParameters, )
 	SHADER_PARAMETER(float, MinRange)
 	SHADER_PARAMETER(float, MaxRange)
 
-	// TODO: output buffer
+	SHADER_PARAMETER_UAV(RWStructuredBuffer<LidarPointAligned>, RTScanResults)
 END_SHADER_PARAMETER_STRUCT()
 
 // LiDAR ray generation shader
@@ -29,7 +39,6 @@ class FLidarRayGenShader : public FGlobalShader
 		return IsRayTracingEnabledForProject(Parameters.Platform);
 	}
 };
-IMPLEMENT_GLOBAL_SHADER(FLidarRayGenShader, "/Plugin/UESensorShaders/Shaders/LidarShaders.usf", "LidarRayGen", SF_RayGen);
 
 // LiDAR miss shader
 class FLidarMissShader : public FGlobalShader
@@ -44,7 +53,6 @@ class FLidarMissShader : public FGlobalShader
 		return IsRayTracingEnabledForProject(Parameters.Platform);
 	}
 };
-IMPLEMENT_GLOBAL_SHADER(FLidarMissShader, "/Plugin/UESensorShaders/Shaders/LidarShaders.usf", "LidarMiss", SF_RayMiss);
 
 // LiDAR closest hit shader
 class FLidarClosestHitShader : public FGlobalShader
@@ -59,4 +67,3 @@ class FLidarClosestHitShader : public FGlobalShader
 		return IsRayTracingEnabledForProject(Parameters.Platform);
 	}
 };
-IMPLEMENT_GLOBAL_SHADER(FLidarClosestHitShader, "/Plugin/UESensorShaders/Shaders/LidarShaders.usf", "LidarClosestHit", SF_RayHitGroup);

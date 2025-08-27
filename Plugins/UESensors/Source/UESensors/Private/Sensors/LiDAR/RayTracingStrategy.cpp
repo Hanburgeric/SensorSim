@@ -40,7 +40,7 @@ TArray<FLidarPoint> RayTracingStrategy::ExecuteScan(const ULidarSensor& LidarSen
 			{
 				FRDGBuilder GraphBuilder(RHICmdList);
 
-				// ???
+				// Allocate shader parameters
 				FLidarShaderParameters* Parameters{ GraphBuilder.AllocParameters<FLidarShaderParameters>() };
 				
 				// Configure shader input parameters
@@ -52,8 +52,14 @@ TArray<FLidarPoint> RayTracingStrategy::ExecuteScan(const ULidarSensor& LidarSen
 				Parameters->MinRange = MinRange;
 				Parameters->MaxRange = MaxRange;
 
-				// TODO: Configure shader output parameters
+				// Configure shader output parameters
+				Parameters->RTScanResults;
 
+				// Get LiDAR shaders
+				TShaderMapRef<FLidarRayGenShader> RayGenShader{ GetGlobalShaderMap(GMaxRHIFeatureLevel) };
+				TShaderMapRef<FLidarMissShader> MissShader{ GetGlobalShaderMap(GMaxRHIFeatureLevel) };
+				TShaderMapRef<FLidarClosestHitShader> ClosestHitShader{ GetGlobalShaderMap(GMaxRHIFeatureLevel) };
+				
 				GraphBuilder.Execute();
 			}
 		);
