@@ -11,7 +11,8 @@ public class UESensors : ModuleRules
 			{
 				"Core", "CoreUObject", "Engine",
 				"RenderCore", "Renderer", "RHI",
-				"CinematicCamera", "CineCameraSceneCapture"
+				"CinematicCamera", "CineCameraSceneCapture",
+				"UESensorShaders"
 			}
 		);
 	}

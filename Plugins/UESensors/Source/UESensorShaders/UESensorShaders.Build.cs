@@ -11,7 +11,7 @@ public class UESensorShaders : ModuleRules
             {
 				"Projects",
 				"Core", "Engine",
-				"RenderCore"
+				"RenderCore", "RHI"
 			}
 		);
 	}
