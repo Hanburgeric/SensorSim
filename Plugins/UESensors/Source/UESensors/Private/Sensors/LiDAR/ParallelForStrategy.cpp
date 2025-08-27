@@ -8,7 +8,7 @@ namespace lidar {
 
 TArray<FLidarPoint> ParallelForStrategy::ExecuteScan(const ULidarSensor& LidarSensor)
 {
-	TArray<FLidarPoint> ScanResult{};
+	TArray<FLidarPoint> ScanResults{};
 
 	if (const UWorld* World{ LidarSensor.GetWorld() })
 	{
@@ -22,8 +22,12 @@ TArray<FLidarPoint> ParallelForStrategy::ExecuteScan(const ULidarSensor& LidarSe
 		// Initialize as many points as there are samples; this is an overestimation since samples can miss
 		// (i.e. not hit anything), but this is preferable to multiple memory reallocations
 		const int32 NumSamples{ SampleDirections.Num() };
-		ScanResult.SetNum(NumSamples);
+		ScanResults.SetNum(NumSamples);
 
+		// Get the range of the LiDAR
+		const float MinRange{ LidarSensor.MinRange };
+		const float MaxRange{ LidarSensor.MaxRange };
+		
 		// Configure line trace parameters
 		const ECollisionChannel LineTraceChannel{ ECollisionChannel::ECC_Visibility };
 
@@ -38,15 +42,15 @@ TArray<FLidarPoint> ParallelForStrategy::ExecuteScan(const ULidarSensor& LidarSe
 			NumSamples, [&](int32 Index)
 			{
 				// Get the point whose data to populate
-				FLidarPoint& Point{ ScanResult[Index] };
+				FLidarPoint& Point{ ScanResults[Index] };
 
 				// Calculate the direction in which to cast the line trace
 				const FVector SampleDirection{ SampleDirections[Index] };
 				const FVector LineTraceDirection{ SensorRotation.RotateVector(SampleDirection) };
 
 				// Calculate the start and end points for the line trace
-				const FVector LineTraceStart{ SensorLocation + LidarSensor.MinRange * LineTraceDirection };
-				const FVector LineTraceEnd{ SensorLocation + LidarSensor.MaxRange * LineTraceDirection };
+				const FVector LineTraceStart{ SensorLocation + MinRange * LineTraceDirection };
+				const FVector LineTraceEnd{ SensorLocation + MaxRange * LineTraceDirection };
 
 				// Perform the line trace and store the result
 				FHitResult HitResult{};
@@ -73,7 +77,7 @@ TArray<FLidarPoint> ParallelForStrategy::ExecuteScan(const ULidarSensor& LidarSe
 
 		// Remove all points that did failed to hit anything in a single pass
 		// to create a clean set of results
-		ScanResult.RemoveAll(
+		ScanResults.RemoveAll(
 			[](const FLidarPoint& Point)
 			{
 				return !Point.bHit;
@@ -81,7 +85,7 @@ TArray<FLidarPoint> ParallelForStrategy::ExecuteScan(const ULidarSensor& LidarSe
 		);
 	}
 
-	return ScanResult;
+	return ScanResults;
 }
 
 } // namespace lidar

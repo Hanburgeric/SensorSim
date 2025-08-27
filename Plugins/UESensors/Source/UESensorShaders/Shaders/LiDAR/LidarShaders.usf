@@ -1,0 +1,86 @@
+﻿#include "/Engine/Public/Platform.ush"
+#include "/Engine/Private/RayTracing/RayTracingCommon.ush"
+
+// Input parameters
+RaytracingAccelerationStructure TLAS;
+float3 SensorLocation;
+float4 SensorRotation;
+StructuredBuffer<float3> SampleDirections;
+uint NumSamples;
+float MinRange;
+float MaxRange;
+
+// TODO: Output parameters
+
+// LiDAR point payload
+struct LidarPointPayload
+{
+	float3 XYZ;
+	float Intensity;
+	uint RGB;
+	bool bHit;
+};
+
+// Utility function to rotate a vector by a quaternion
+float3 RotateVectorByQuaternion(float3 Vector, float4 Quaternion)
+{
+	float3 QuatVector = Quaternion.xyz;
+	float QuatScalar = Quaternion.w;
+
+	float3 CrossProduct = 2.0F * cross(QuatVector, Vector);
+	
+	return Vector + (QuatScalar * CrossProduct) + cross(QuatVector, CrossProduct);
+}
+
+[shader("raygen")]
+void LidarRayGen()
+{
+	// Get current ray index and ensure that it is valid
+	uint RayIndex = DispatchRaysIndex().x;
+	if (RayIndex >= NumSamples)
+	{
+		return;
+	}
+
+	// Get the sample direction for the ray
+	float3 LocalDirection = SampleDirections[RayIndex];
+
+	// Convert the sample direction from local space to world space
+	float3 WorldDirection = RotateVectorByQuaternion(LocalDirection, SensorRotation);
+
+	// Zero-initialize payload
+	FLidarPointPayload Payload;
+	Payload.XYZ = float3(0, 0, 0);
+	Payload.Intensity = 0.0F;
+	Payload.RGB = 0U;
+
+	// Trace ray
+
+	// Write payload content into output parameters
+}
+
+[shader("miss")]
+void LidarMiss(inout LidarPointPayload Payload)
+{
+	// Zero-initialize all values
+	Payload.XYZ = float3(0, 0, 0);
+	Payload.Intensity = 0.0F;
+	Payload.RGB = 0U;
+
+	// Mark the point as a miss such that it may later be discarded
+	Point.bHit = false;
+}
+
+[shader("closesthit")]
+void LidarClosestHit(inout LidarPointPayload Payload, in BuiltInTriangleIntersectionAttributes Attributes)
+{
+	// Calculate the point of impact
+	Payload.XYZ = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
+
+	// TODO: actually calculate intensity and color
+	Payload.Intensity = 0.0F;
+	Payload.RGB = 0U;
+	
+	// Mark the point as a hit such that it is not discarded
+	Payload.bHit = true;
+}

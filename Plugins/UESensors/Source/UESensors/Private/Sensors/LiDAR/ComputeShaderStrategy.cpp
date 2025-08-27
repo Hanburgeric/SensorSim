@@ -8,11 +8,11 @@ namespace lidar {
 
 TArray<FLidarPoint> ComputeShaderStrategy::ExecuteScan(const ULidarSensor& LidarSensor)
 {
-	TArray<FLidarPoint> ScanResult{};
+	TArray<FLidarPoint> ScanResults{};
 
 	// TODO: oh boy
 
-	return ScanResult;
+	return ScanResults;
 }
 
 } // namespace lidar
