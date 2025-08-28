@@ -10,103 +10,102 @@ uint NumSamples;
 float MinRange;
 float MaxRange;
 
-// Output parameters
+// Output structure matching C++
 struct LidarPoint32Aligned
 {
-	float3 XYZ;
-	float Intensity;
-	uint RGB;
-	uint bHit;
-	uint2 Padding;
+    float3 XYZ;
+    float Intensity;
+    uint RGB;
+    uint bHit;
+    uint2 Padding;
 };
-RWStructuredBuffer<LidarPoint32Aligned> RTScanResults;
+
+// Output parameters
+RWStructuredBuffer<LidarPoint32Aligned> GPUScanResults;
 
 // Ray payload
-struct LidarPayload
+struct RayPayload
 {
-	float3 XYZ;
-	float Intensity;
-	uint RGB;
-	bool bHit;
+    float3 XYZ;
+    float Intensity;
+    uint RGB;
+    bool bHit;
 };
 
 // Utility function to rotate a vector by a quaternion
 float3 RotateVectorByQuaternion(float3 Vector, float4 Quaternion)
 {
-	float3 QuatVector = Quaternion.xyz;
-	float QuatScalar = Quaternion.w;
+    float3 QuatVector = Quaternion.xyz;
+    float QuatScalar = Quaternion.w;
 
-	float3 CrossProduct = 2.0F * cross(QuatVector, Vector);
+    float3 CrossProduct = 2.0F * cross(QuatVector, Vector);
 	
-	return Vector + (QuatScalar * CrossProduct) + cross(QuatVector, CrossProduct);
+    return Vector + (QuatScalar * CrossProduct) + cross(QuatVector, CrossProduct);
 }
 
-[shader("raygen")]
+[shader("raygeneration")]
 void LidarRayGen()
 {
 	// Get current ray index and ensure that it is valid
-	uint RayIndex = DispatchRaysIndex().x;
-	if (RayIndex >= NumSamples)
-	{
-		return;
-	}
+    uint RayIndex = DispatchRaysIndex().x;
+    if (RayIndex >= NumSamples) { return; }
 
 	// Get the sample direction for the ray
-	float3 LocalDirection = SampleDirections[RayIndex];
+    float3 LocalDirection = SampleDirections[RayIndex];
 
 	// Convert the sample direction from local space to world space
-	float3 WorldDirection = RotateVectorByQuaternion(LocalDirection, SensorRotation);
+    float3 WorldDirection = RotateVectorByQuaternion(LocalDirection, SensorRotation);
 
 	// Configure the ray
-	RayDesc Ray;
-	Ray.Origin = SensorLocation + WorldDirection * MinRange;
-	Ray.Direction = WorldDirection;
-	Ray.TMin = 0.0F;
-	Ray.TMax = MaxRange - MinRange;
+    RayDesc Ray;
+    Ray.Origin = SensorLocation + WorldDirection * MinRange;
+    Ray.Direction = WorldDirection;
+    Ray.TMin = 0.0F;
+    Ray.TMax = max(0.0F, MaxRange - MinRange);
 	
 	// Zero-initialize the payload
-	LidarPayload Payload;
-	Payload.XYZ = float3(0.0F, 0.0F, 0.0F);
-	Payload.Intensity = 0.0F;
-	Payload.RGB = 0x00000000;
-	Payload.bHit = false;
+    RayPayload Payload;
+    Payload.XYZ = float3(0.0F, 0.0F, 0.0F);
+    Payload.Intensity = 0.0F;
+    Payload.RGB = 0x00000000U;
+    Payload.bHit = false;
 
 	// Trace ray
-	TraceRay(TLAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0U, 1U, 0U, Ray, Payload);
+    TraceRay(TLAS, RAY_FLAG_FORCE_OPAQUE, 0xFFU, 0U, 1U, 0U, Ray, Payload);
 
 	// Write results to output parameters
-	LidarPointAligned ScanResult;
-	ScanResult.XYZ = Payload.XYZ;
-	ScanResult.Intensity = Payload.Intensity;
-	ScanResult.RGB = Payload.RGB;
-	ScanResult.bHit = Payload.bHit ? 1U : 0U;
-	ScanResult.Padding = uint2(0U, 0U);
+    LidarPoint32Aligned TraceResult;
+    TraceResult.XYZ = Payload.XYZ;
+    TraceResult.Intensity = Payload.Intensity;
+    TraceResult.RGB = Payload.RGB;
+    TraceResult.bHit = Payload.bHit ? 1U : 0U;
+    TraceResult.Padding = uint2(0U, 0U);
 	
-	RTScanResults[RayIndex] = ScanResult;
+    GPUScanResults[RayIndex] = TraceResult;
 }
 
 [shader("miss")]
-void LidarMiss(inout LidarPayload Payload)
+void LidarMiss(inout RayPayload Payload)
 {
 	// Zero-initialize all values
-	Payload.XYZ = float3(0.0F, 0.0F, 0.0F);
-	Payload.Intensity = 0.0F;
-	Payload.RGB = 0x00000000;
+    Payload.XYZ = float3(0.0F, 0.0F, 0.0F);
+    Payload.Intensity = 0.0F;
+    Payload.RGB = 0x00000000U;
 
 	// Mark the point as a miss such that it can later be discarded
-	Payload.bHit = false;
+    Payload.bHit = false;
 }
 
 [shader("closesthit")]
-void LidarClosestHit(inout LidarPayload Payload, in BuiltInTriangleIntersectionAttributes Attributes)
+void LidarClosestHit(inout RayPayload Payload, in BuiltInTriangleIntersectionAttributes Attributes)
 {
 	// Calculate the point of impact
-	Payload.XYZ = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
+    Payload.XYZ = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
 
 	// TODO: actually calculate intensity and color
-	Payload.Intensity = 0.0F;
-	Payload.RGB = 0x00000000;
+    Payload.Intensity = 0.0F;
+    Payload.RGB = 0x00000000U;
 	
 	// Mark the point as a hit such that it is not discarded
-	Payload.bHit = true;
+    Payload.bHit = true;
 }

@@ -15,7 +15,7 @@ void FUESensorShadersModule::StartupModule()
 		)
 	};
 
-	AddShaderSourceDirectoryMapping(TEXT("/Plugin/UESensors"), ShaderDirectory);
+	AddShaderSourceDirectoryMapping(TEXT("/Shaders"), ShaderDirectory);
 }
 
 void FUESensorShadersModule::ShutdownModule()
