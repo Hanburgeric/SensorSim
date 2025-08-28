@@ -18,7 +18,7 @@ struct LidarPoint32Aligned
 class FLidarRayGenShader : public FGlobalShader
 {
 	DECLARE_GLOBAL_SHADER(FLidarRayGenShader)
-	SHADER_USE_PARAMETER_STRUCT(FLidarRayGenShader, FGlobalShader)
+	SHADER_USE_ROOT_PARAMETER_STRUCT(FLidarRayGenShader, FGlobalShader)
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER_RDG_BUFFER_SRV(RaytracingAccelerationStructure, TLAS)
@@ -47,7 +47,7 @@ class FLidarRayGenShader : public FGlobalShader
 class FLidarMissShader : public FGlobalShader
 {
 	DECLARE_GLOBAL_SHADER(FLidarMissShader)
-	SHADER_USE_PARAMETER_STRUCT(FLidarMissShader, FGlobalShader)
+	SHADER_USE_ROOT_PARAMETER_STRUCT(FLidarMissShader, FGlobalShader)
 
 	using FParameters = FEmptyShaderParameters;
 
@@ -66,7 +66,7 @@ class FLidarMissShader : public FGlobalShader
 class FLidarClosestHitShader : public FGlobalShader
 {
 	DECLARE_GLOBAL_SHADER(FLidarClosestHitShader)
-	SHADER_USE_PARAMETER_STRUCT(FLidarClosestHitShader, FGlobalShader)
+	SHADER_USE_ROOT_PARAMETER_STRUCT(FLidarClosestHitShader, FGlobalShader)
 
 	using FParameters = FEmptyShaderParameters;
 
