@@ -21,14 +21,11 @@ TArray<FLidarPoint> RayTracingStrategy::ExecuteScan(const ULidarSensor& LidarSen
 	const UWorld* World{ LidarSensor.GetWorld() };
 	const FSceneInterface* Scene{ World ? World->Scene : nullptr };
 	const FScene* RenderScene{ Scene ? Scene->GetRenderScene() : nullptr };
-	if (!RenderScene || !RenderScene->RayTracingScene.IsCreated())
+	if (!RenderScene)
 	{
-		UE_LOG(LogLiDARSensor, Warning, TEXT("Ray tracing scene unavailable; cannot execute LiDAR scan."));
+		UE_LOG(LogLiDARSensor, Warning, TEXT("Render scene unavailable; cannot execute LiDAR scan."));
 		return ScanResults;
 	}
-
-	// Get the ray tracing scene
-	const FRayTracingScene& RayTracingScene{ RenderScene->RayTracingScene };
 
 	// Get the world location and rotation for the sensor
 	const FVector SensorLocation{ LidarSensor.GetComponentLocation() };
@@ -52,21 +49,9 @@ TArray<FLidarPoint> RayTracingStrategy::ExecuteScan(const ULidarSensor& LidarSen
 
 	// Execute scan on render thread
 	ENQUEUE_RENDER_COMMAND(LidarRTScan)(
-		[SensorLocation, SensorRotation, SampleDirections, NumSamples, MinRange, MaxRange, GPUScanResults](FRHICommandListImmediate& RHICmdList)
+		[SensorLocation, SensorRotation, NumSamples, MinRange, MaxRange](FRHICommandListImmediate& RHICmdList)
 		{
 			FRDGBuilder GraphBuilder(RHICmdList);
-
-			// Allocate sample directions input buffer
-			const FRDGBufferRef SampleDirectionsBuffer{
-				CreateStructuredBuffer(GraphBuilder, TEXT("SampleDirections"), sizeof(FVector3f), NumSamples, SampleDirections.GetData(), sizeof(FVector3f) * NumSamples)
-			};
-
-			// Allocate GPU scan results output buffer
-			const FRDGBufferRef GPUScanResultsBuffer{
-				GraphBuilder.CreateBuffer(
-					FRDGBufferDesc::CreateStructuredDesc(sizeof(LidarPoint32Aligned), NumSamples), TEXT("GPUScanResults")
-				)
-			};
 
 			// Allocate shader parameters
 			FLidarRayGenShader::FParameters* Parameters{ GraphBuilder.AllocParameters<FLidarRayGenShader::FParameters>() };
@@ -75,20 +60,55 @@ TArray<FLidarPoint> RayTracingStrategy::ExecuteScan(const ULidarSensor& LidarSen
 			Parameters->TLAS;
 			Parameters->SensorLocation = FVector3f{ SensorLocation };
 			Parameters->SensorRotation = FVector4f{ FVector4{ SensorRotation.X, SensorRotation.Y, SensorRotation.Z, SensorRotation.W } };
-			Parameters->SampleDirections = GraphBuilder.CreateSRV(SampleDirectionsBuffer);
+			Parameters->SampleDirections;
 			Parameters->NumSamples = NumSamples;
 			Parameters->MinRange = MinRange;
 			Parameters->MaxRange = MaxRange;
 
 			// Configure shader output parameters
-			Parameters->GPUScanResults = GraphBuilder.CreateUAV(GPUScanResultsBuffer);
+			Parameters->GPUScanResults;
 
 			// Add ray trace pass
 			GraphBuilder.AddPass(
 				RDG_EVENT_NAME("LidarRTScan"), Parameters, ERDGPassFlags::Compute,
-				[&](FRHIRayTracingCommandList& RHIRTCmdList)
+				[NumSamples](FRHIRayTracingCommandList& RHICmdList)
 				{
-					// ???
+					// Get global shaders
+					FGlobalShaderMap* GlobalShaderMap{ GetGlobalShaderMap(GMaxRHIFeatureLevel) };
+					TShaderMapRef<FLidarRayGenShader> RayGenShader{ GlobalShaderMap };
+					TShaderMapRef<FLidarMissShader> MissShader{ GlobalShaderMap };
+					TShaderMapRef<FLidarClosestHitShader> ClosestHitShader{ GlobalShaderMap };
+
+					// Configure and initializer pipeline
+					FRayTracingPipelineStateInitializer PSInitializer{};
+					PSInitializer.MaxPayloadSizeInBytes = GetRayTracingPayloadTypeMaxSize(FLidarRayGenShader::GetRayTracingPayloadType(0));
+					
+					TArray<FRHIRayTracingShader*> RayGenShaderTable{};
+					RayGenShaderTable.Emplace(RayGenShader.GetRayTracingShader());
+					PSInitializer.SetRayGenShaderTable(RayGenShaderTable);
+
+					TArray<FRHIRayTracingShader*> MissShaderTable{};
+					MissShaderTable.Emplace(MissShader.GetRayTracingShader());
+					PSInitializer.SetMissShaderTable(MissShaderTable);
+
+					TArray<FRHIRayTracingShader*> HitGroupTable{};
+					HitGroupTable.Emplace(ClosestHitShader.GetRayTracingShader());
+					PSInitializer.SetHitGroupTable(HitGroupTable);
+
+					FRayTracingPipelineState* Pipeline{ PipelineStateCache::GetAndOrCreateRayTracingPipelineState(RHICmdList, PSInitializer) };
+
+					// Configure and initialize shader binding table
+					FRayTracingShaderBindingTableInitializer SBTInitializer{};
+
+					FRHIShaderBindingTable* SBT{ RHICmdList.CreateRayTracingShaderBindingTable(SBTInitializer) };
+
+					// Configure and initialize batched shader parameters
+					FRHIBatchedShaderParameters BSP{ RHICmdList.GetScratchShaderParameters() };
+
+					// Dispatch rays
+					RHICmdList.RayTraceDispatch(
+						Pipeline, RayGenShader.GetRayTracingShader(), SBT, BSP, NumSamples, 1
+					);
 				}
 			);
 
@@ -96,7 +116,8 @@ TArray<FLidarPoint> RayTracingStrategy::ExecuteScan(const ULidarSensor& LidarSen
 		}
 	);
 
-	// Wait for the GPU to completion to read back results
+	// Wait for GPU completion to read back results; note that this blocks the game thread, so
+	// it may be advisable to design a system that doesn't reqire waiting for performance
 	FlushRenderingCommands();
 
 	// Convert scan results from GPU to CPU
@@ -107,8 +128,8 @@ TArray<FLidarPoint> RayTracingStrategy::ExecuteScan(const ULidarSensor& LidarSen
 		FLidarPoint& Dst{ ScanResults[i] };
 
 		Dst.XYZ = Src.XYZ;
-		Dst.Intensity = Src.Intensity;
-		Dst.RGB = FColor{ (Src.RGB >> 16U) & 0xFFU, (Src.RGB >> 8U) & 0xFFU, Src.RGB & 0xFFU, 255U };
+		Dst.Intensity = 0.0F;
+		Dst.RGB = FColor::Black;
 		Dst.bHit = (Src.bHit != 0U);
 	}
 

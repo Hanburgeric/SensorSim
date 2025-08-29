@@ -6,11 +6,11 @@ public class UESensors : ModuleRules
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
-		PublicDependencyModuleNames.AddRange(
+        PublicDependencyModuleNames.AddRange(
 			new string[]
 			{
 				"Core", "CoreUObject", "Engine",
-				"RenderCore", "Renderer", "RHI",
+				"RenderCore", "RHI",
 				"CinematicCamera", "CineCameraSceneCapture",
 				"UESensorShaders"
 			}
