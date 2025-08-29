@@ -15,7 +15,7 @@ struct LidarPoint32Aligned
 };
 
 // LiDAR ray generation shader
-class FLidarRayGenShader : public FGlobalShader
+class UESENSORSHADERS_API FLidarRayGenShader : public FGlobalShader
 {
 	DECLARE_GLOBAL_SHADER(FLidarRayGenShader)
 	SHADER_USE_ROOT_PARAMETER_STRUCT(FLidarRayGenShader, FGlobalShader)
@@ -44,7 +44,7 @@ class FLidarRayGenShader : public FGlobalShader
 };
 
 // LiDAR miss shader
-class FLidarMissShader : public FGlobalShader
+class UESENSORSHADERS_API FLidarMissShader : public FGlobalShader
 {
 	DECLARE_GLOBAL_SHADER(FLidarMissShader)
 	SHADER_USE_ROOT_PARAMETER_STRUCT(FLidarMissShader, FGlobalShader)
@@ -58,12 +58,12 @@ class FLidarMissShader : public FGlobalShader
 
 	static ERayTracingPayloadType GetRayTracingPayloadType(const int32 PermutationId)
 	{
-		return ERayTracingPayloadType::Minimal;
+		return FLidarRayGenShader::GetRayTracingPayloadType(PermutationId);
 	}
 };
 
 // LiDAR closest hit shader
-class FLidarClosestHitShader : public FGlobalShader
+class UESENSORSHADERS_API FLidarClosestHitShader : public FGlobalShader
 {
 	DECLARE_GLOBAL_SHADER(FLidarClosestHitShader)
 	SHADER_USE_ROOT_PARAMETER_STRUCT(FLidarClosestHitShader, FGlobalShader)
@@ -77,11 +77,6 @@ class FLidarClosestHitShader : public FGlobalShader
 
 	static ERayTracingPayloadType GetRayTracingPayloadType(const int32 PermutationId)
 	{
-		return ERayTracingPayloadType::Minimal;
+		return FLidarRayGenShader::GetRayTracingPayloadType(PermutationId);
 	}
 };
-
-// Implement global shaders
-IMPLEMENT_GLOBAL_SHADER(FLidarRayGenShader, "/Shaders/LiDAR/LidarShaders.usf", "LidarRayGen", SF_RayGen);
-IMPLEMENT_GLOBAL_SHADER(FLidarMissShader, "/Shaders/LiDAR/LidarShaders.usf", "LidarMiss", SF_RayMiss);
-IMPLEMENT_GLOBAL_SHADER(FLidarClosestHitShader, "/Shaders/LiDAR/LidarShaders.usf", "LidarClosestHit", SF_RayHitGroup);
