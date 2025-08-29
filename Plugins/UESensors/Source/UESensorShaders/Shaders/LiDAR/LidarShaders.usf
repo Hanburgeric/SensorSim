@@ -46,7 +46,7 @@ float3 RotateVectorByQuaternion(float3 Vector, float4 Quaternion)
 [shader("raygeneration")]
 void LidarRayGen()
 {
-	// Get current ray index and ensure that it is valid
+	// Ensure that the current ray index is valid
     uint RayIndex = DispatchRaysIndex().x;
     if (RayIndex >= NumSamples) { return; }
 
@@ -55,23 +55,41 @@ void LidarRayGen()
 
 	// Convert the sample direction from local space to world space
     float3 WorldDirection = RotateVectorByQuaternion(LocalDirection, SensorRotation);
-
+    	
+    // Configure ray flags
+    uint RayFlags = RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
+    
+    // Configure other parameters
+    uint InstanceInclusionMask = RAY_TRACING_MASK_OPAQUE;
+    uint RayContributionToHitGroupIndex = RAY_TRACING_SHADER_SLOT_MATERIAL;
+    uint MultiplierForGeometryContributionToHitGroupIndex = RAY_TRACING_NUM_SHADER_SLOTS;
+    uint MissShaderIndex = 0U;
+    
 	// Configure the ray
     RayDesc Ray;
     Ray.Origin = SensorLocation + WorldDirection * MinRange;
     Ray.Direction = WorldDirection;
     Ray.TMin = 0.0F;
     Ray.TMax = max(0.0F, MaxRange - MinRange);
-	
+    
 	// Zero-initialize the payload
     RayPayload Payload;
     Payload.XYZ = float3(0.0F, 0.0F, 0.0F);
     Payload.Intensity = 0.0F;
     Payload.RGB = 0x00000000U;
     Payload.bHit = false;
-
+    
 	// Trace ray
-    TraceRay(TLAS, RAY_FLAG_FORCE_OPAQUE, 0xFFU, 0U, 1U, 0U, Ray, Payload);
+    TraceRay(
+        TLAS,
+        RayFlags,
+        InstanceInclusionMask,
+        RayContributionToHitGroupIndex,
+        MultiplierForGeometryContributionToHitGroupIndex,
+        MissShaderIndex,
+        Ray,
+        Payload
+    );
 
 	// Write results to output parameters
     LidarPoint32Aligned TraceResult;

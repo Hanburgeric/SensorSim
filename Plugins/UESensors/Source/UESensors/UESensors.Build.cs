@@ -10,7 +10,7 @@ public class UESensors : ModuleRules
 			new string[]
 			{
 				"Core", "CoreUObject", "Engine",
-				"RenderCore", "RHI",
+				"RenderCore", "Renderer", "RHI",
 				"CinematicCamera", "CineCameraSceneCapture",
 				"UESensorShaders"
 			}
