@@ -20,9 +20,17 @@ public:
 private:
 	void PostOpaqueRender(FPostOpaqueRenderParameters& Parameters);
 
+private:
 	FDelegateHandle PostOpaqueRenderDelegate{};
+	
+	FVector SensorLocation{ 0.0, 0.0, 0.0 };
+	FQuat SensorRotation{ 0.0, 0.0, 0.0, 0.0 };
+	TArray<FVector3f> SampleDirections{};
+	int32 NumSamples{ 0 };
+	float MinRange{ 0.0F };
+	float MaxRange{ 0.0F };
 
-	FRDGBufferSRVRef TLAS{ nullptr };
+	TArray<FLidarPoint> ScanResults{};
 };
 
 } // namespace lidar
