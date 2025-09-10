@@ -31,6 +31,8 @@ private:
 	float MaxRange{ 0.0F };
 
 	TArray<FLidarPoint> ScanResults{};
+	TUniquePtr<FRHIGPUBufferReadback> ScanResultsReadback{};
+	bool bReadbackInFlight{ false };
 };
 
 } // namespace lidar

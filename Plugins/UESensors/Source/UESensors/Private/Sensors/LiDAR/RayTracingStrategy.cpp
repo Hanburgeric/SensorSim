@@ -24,6 +24,9 @@ RayTracingStrategy::RayTracingStrategy()
 			FPostOpaqueRenderDelegate::CreateRaw(this, &RayTracingStrategy::PostOpaqueRender)
 		);
 	}
+
+	// Create the GPU buffer readback
+	ScanResultsReadback = MakeUnique<FRHIGPUBufferReadback>(TEXT("ScanResultsReadback"));
 }
 RayTracingStrategy::~RayTracingStrategy()
 {
@@ -45,14 +48,21 @@ TArray<FLidarPoint> RayTracingStrategy::ExecuteScan(const ULidarSensor& LidarSen
 	// Update the directions in which to perform the scan
 	SampleDirections = LidarSensor.GetSampleDirections();
 
-	// Initialize as many points as there are samples; this is an overestimation since samples can miss
-	// (i.e. not hit anything), but this is preferable to multiple memory reallocations
+	// Update the number of samples
 	NumSamples = SampleDirections.Num();
-	ScanResults.SetNum(NumSamples);
 
-	// Get the range of the LiDAR
+	// Update the range of the LiDAR
 	MinRange = LidarSensor.MinRange;
 	MaxRange = LidarSensor.MaxRange;
+	
+	// Remove all points that did failed to hit anything in a single pass
+	// to create a clean set of results
+	ScanResults.RemoveAll(
+		[](const FLidarPoint& Point)
+		{
+			return !Point.bHit;
+		}
+	);
 	
 	// Return the scan results; this will be updated in PostOpaqueRender
 	return ScanResults;
@@ -179,6 +189,58 @@ void RayTracingStrategy::PostOpaqueRender(FPostOpaqueRenderParameters& Parameter
 			RHICmdList.RayTraceDispatch(
 				Pipeline, RayGenShader.GetRayTracingShader(), SBT, BSP, ShaderParameters->NumSamples, 1U
 			);
+		}
+	);
+
+	// Add GPU buffer readback pass
+	AddReadbackBufferPass(
+		*GraphBuilder, RDG_EVENT_NAME("LidarRTReadback"), GPUScanResultsBuffer,
+		[this, GPUScanResultsBuffer, ShaderParameters](FRHICommandListImmediate& RHICmdList)
+		{
+			// Only request a readback if one is not already in flight
+			if (!bReadbackInFlight)
+			{
+				// Request a readback
+				const uint32 NumBytes{ static_cast<uint32>(sizeof(LidarPoint32Aligned)) * ShaderParameters->NumSamples };
+				ScanResultsReadback->EnqueueCopy(RHICmdList, GPUScanResultsBuffer->GetRHI(), NumBytes);
+
+				// Mark that a readback is now in flight
+				bReadbackInFlight = true;
+			}
+		}
+	);
+
+	// Add readback copy pass
+	GraphBuilder->AddPass(
+		RDG_EVENT_NAME("LidarRTReadbackCopy"), ERDGPassFlags::NeverCull,
+		[this, ShaderParameters](FRHICommandListImmediate& RHICmdList)
+		{
+			// Only attempt to copy from the readback if it is ready
+			if (bReadbackInFlight && ScanResultsReadback->IsReady())
+			{
+				// Get the raw data from the readback
+				const uint32 NumBytes{ static_cast<uint32>(ScanResultsReadback->GetGPUSizeBytes()) };
+				const LidarPoint32Aligned* Src{
+					static_cast<const LidarPoint32Aligned*>(ScanResultsReadback->Lock(NumBytes))
+				};
+
+				// Initialize as many points as there are samples; this is an overestimation since samples can miss
+				// (i.e. not hit anything), but this is preferable to multiple memory reallocations
+				ScanResults.SetNum(ShaderParameters->NumSamples);
+
+				// Fill scan results with readback data
+				for (int32 i{ 0 }; i < ScanResults.Num(); ++i)
+				{
+					ScanResults[i].XYZ = Src[i].XYZ;
+					ScanResults[i].Intensity = Src[i].Intensity;
+					ScanResults[i].RGB =  FColor{ Src[i].RGB };
+					ScanResults[i].bHit = (Src[i].bHit != 0);
+				}
+
+				// Mark that the readback has been completed and is ready for another iteration
+				ScanResultsReadback->Unlock();
+				bReadbackInFlight = false;
+			}
 		}
 	);
 }
