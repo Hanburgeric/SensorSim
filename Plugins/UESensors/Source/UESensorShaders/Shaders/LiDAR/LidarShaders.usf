@@ -22,7 +22,7 @@ struct LidarPoint32Aligned
 };
 
 // Output parameters
-RWStructuredBuffer<LidarPoint32Aligned> GPUScanResults;
+RWStructuredBuffer<LidarPoint32Aligned> RTScanResults;
 
 // Ray payload
 struct RayPayload
@@ -100,7 +100,7 @@ void LidarRayGen()
     TraceResult.bHit = Payload.bHit ? 1U : 0U;
     TraceResult.Padding = uint2(0U, 0U);
 	
-    GPUScanResults[RayIndex] = TraceResult;
+    RTScanResults[RayIndex] = TraceResult;
 }
 
 [shader("miss")]

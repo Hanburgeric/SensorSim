@@ -3,16 +3,13 @@
 #include "CoreMinimal.h"
 #include "Sensors/LiDAR/LidarStrategy.h"
 
-// Forward declarations
-class ULidarSensor;
-
 namespace uesensors {
 namespace lidar {
 	
 class ComputeShaderStrategy final : public Strategy
 {
 public:
-	TArray<FLidarPoint> ExecuteScan(const ULidarSensor& LidarSensor) override;
+	TArray<FLidarPoint> ExecuteScan(const UWorld* World, const FLidarScanParameters& InScanParameters) override;
 };
 
 } // namespace lidar

@@ -1,58 +1,46 @@
 #include "Sensors/LiDAR/ParallelForStrategy.h"
 
-// UESensors
-#include "Sensors/LiDAR/LidarSensor.h"
+DECLARE_LOG_CATEGORY_EXTERN(LogLiDARSensor, Log, All);
 
 namespace uesensors {
 namespace lidar {
 
-TArray<FLidarPoint> ParallelForStrategy::ExecuteScan(const ULidarSensor& LidarSensor)
+ParallelForStrategy::ParallelForStrategy()
+{
+	// Initialize default line trace parameters
+	LineTraceChannel = ECC_Visibility;
+
+	LineTraceQueryParams.bTraceComplex = true;
+	LineTraceQueryParams.bReturnPhysicalMaterial = true;
+}
+
+TArray<FLidarPoint> ParallelForStrategy::ExecuteScan(const UWorld* World, const FLidarScanParameters& InScanParameters)
 {
 	TArray<FLidarPoint> ScanResults{};
 
-	// Early return condition(s)
-	const UWorld* World{ LidarSensor.GetWorld() };
-	if (!World)
-	{
-		UE_LOG(LogLiDARSensor, Warning, TEXT("Invalid world; cannot execute LiDAR scan."));
-		return ScanResults;
-	}
-
-	// Get the world location and rotation for the sensor
-	const FVector SensorLocation{ LidarSensor.GetComponentLocation() };
-	const FQuat SensorRotation{ LidarSensor.GetComponentQuat() };
-
-	// Get the directions in which to perform the scan
-	const TArray<FVector3f>& SampleDirections{ LidarSensor.GetSampleDirections() };
-
 	// Initialize as many points as there are samples; this is an overestimation since samples can miss
 	// (i.e. not hit anything), but this is preferable to multiple memory reallocations
-	const int32 NumSamples{ SampleDirections.Num() };
+	const int32 NumSamples{ InScanParameters.SampleDirections.Num() };
 	ScanResults.SetNum(NumSamples);
 
-	// Get the range of the LiDAR
-	const float MinRange{ LidarSensor.MinRange };
-	const float MaxRange{ LidarSensor.MaxRange };
-		
-	// Configure line trace parameters
-	const ECollisionChannel LineTraceChannel{ ECollisionChannel::ECC_Visibility };
-
-	FCollisionQueryParams LineTraceQueryParams{};
-	LineTraceQueryParams.bTraceComplex = true;
-	LineTraceQueryParams.bReturnPhysicalMaterial = true;
-
-	FCollisionResponseParams LineTraceResponseParams{};
-
 	// Process all samples in parallel for improved throughput
-	ParallelFor(
-		NumSamples, [&](int32 Index)
+	ParallelFor(NumSamples,
+		[this, &ScanResults, World,
+		 SensorLocation = InScanParameters.SensorLocation,
+		 SensorRotation = InScanParameters.SensorRotation,
+		 SampleDirections = MakeArrayView(InScanParameters.SampleDirections),
+		 MinRange = InScanParameters.MinRange,
+		 MaxRange = InScanParameters.MaxRange]
+		(int32 Index)
 		{
 			// Get the point whose data to populate
 			FLidarPoint& Point{ ScanResults[Index] };
 
 			// Calculate the direction in which to cast the line trace
-			const FVector SampleDirection{ SampleDirections[Index] };
-			const FVector LineTraceDirection{ SensorRotation.RotateVector(SampleDirection) };
+			const FVector3f& SampleDirection{ SampleDirections[Index] };
+			const FVector3f LineTraceDirection{
+				FQuat4f{ SensorRotation.X, SensorRotation.Y, SensorRotation.Z, SensorRotation.W }.RotateVector(SampleDirection)
+			};
 
 			// Calculate the start and end points for the line trace
 			const FVector LineTraceStart{ SensorLocation + MinRange * LineTraceDirection };
@@ -69,20 +57,19 @@ TArray<FLidarPoint> ParallelForStrategy::ExecuteScan(const ULidarSensor& LidarSe
 			// If the line trace hit, populate the point with relevant data
 			if (Point.bHit)
 			{
-				// Store the world location of the hit
 				Point.XYZ = FVector3f{ HitResult.ImpactPoint };
 
-				// TODO: calculate proper intensity based on distance, angle, and material properties
+				// TODO: calculate intensity based on distance, angle, and material properties
 				Point.Intensity = 0.0F;
 
 				// TODO: extract semantic segmentation color from custom depth stencil value
-				Point.RGB = FColor::Red;
+				Point.RGB = FColor::Black;
 			}
 		}
 	);
 
 	// Remove all points that did failed to hit anything in a single pass
-	// to create a clean set of results
+	// to create a clean set of valid results
 	ScanResults.RemoveAll(
 		[](const FLidarPoint& Point)
 		{

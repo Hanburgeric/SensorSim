@@ -130,7 +130,7 @@ void ULidarSensor::SetVerticalResolution(float NewVerticalResolution)
 	if (VerticalResolution == NewVerticalResolution) { return; }
 
 	// Otherwise, update the value clamped to sensible values
-	VerticalResolution = FMath::Max(0.0F, NewVerticalResolution);
+	VerticalResolution = FMath::Max(0.01F, NewVerticalResolution);
 
 	// Rebuild the sample directions if the BeginPlay has already been called
 	if (HasBegunPlay())
@@ -171,19 +171,33 @@ const TArray<FLidarPoint>& ULidarSensor::GetScanData() const
 
 void ULidarSensor::ExecuteScan_Implementation()
 {
+	const UWorld* World{ GetWorld() };
+	check(World);
+
+	// Get the sensor location and rotation in world space
+	const FVector Loc{ GetComponentLocation() };
+	const FQuat Rot{ GetComponentQuat() };
+
+	// Initialize the parameters required to perform the scan
+	FLidarScanParameters ScanParameters{};
+	ScanParameters.SensorLocation = FVector3f{ Loc };
+	ScanParameters.SensorRotation = FVector4f{ FVector4{ Rot.X, Rot.Y, Rot.Z, Rot.W} };
+	ScanParameters.SampleDirections = SampleDirections;
+	ScanParameters.MinRange = MinRange;
+	ScanParameters.MaxRange = MaxRange;
+
 	// Allow the strategy defined by ScanMode to execute the actual LiDAR scan
 	if (ScanStrategy)
 	{
-		ScanData = ScanStrategy->ExecuteScan(*this);
+		ScanData = ScanStrategy->ExecuteScan(World, ScanParameters);
 	}
 
-	// TEMPORARY: debug draw scan data as spheres
-	if (const UWorld* World{ GetWorld() })
+	// If desired, debug draw scan data as points
+	if (bDebugDrawScanData)
 	{
 		for (const FLidarPoint& Point : ScanData)
 		{
-			//UE_LOG(LogLiDARSensor, Warning, TEXT("Lidar Point: (%0.3f,%0.3f,%0.3f)"), Point.XYZ.X, Point.XYZ.Y, Point.XYZ.Z);
-			//DrawDebugSphere(World, FVector{ Point.XYZ }, 10.0F, 4, Point.RGB);
+			DrawDebugPoint(World, FVector{ Point.XYZ }, DebugPointSize, Point.RGB);
 		}
 	}
 }
@@ -211,7 +225,7 @@ void ULidarSensor::RebuildSampleDirections()
 			const float Yaw{ -0.5F * HorizontalFieldOfView + (h + 0.5F) * HorizontalResolution };
 
 			// Construct the direction unit vector for the sample from the pitch and yaw
-			const FVector SampleDirection{ FRotator{ Pitch, Yaw, 0.0F }.Vector() };
+			const FVector3f SampleDirection{ FRotator3f{ Pitch, Yaw, 0.0F }.Vector() };
 
 			// Add the sample direction to the array
 			SampleDirections.Emplace(SampleDirection);

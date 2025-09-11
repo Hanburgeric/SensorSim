@@ -1,12 +1,11 @@
 #include "Sensors/LiDAR/ComputeShaderStrategy.h"
 
-// UESensors
-#include "Sensors/LiDAR/LidarSensor.h"
+DECLARE_LOG_CATEGORY_EXTERN(LogLiDARSensor, Log, All);
 
 namespace uesensors {
 namespace lidar {
 
-TArray<FLidarPoint> ComputeShaderStrategy::ExecuteScan(const ULidarSensor& LidarSensor)
+TArray<FLidarPoint> ComputeShaderStrategy::ExecuteScan(const UWorld* World, const FLidarScanParameters& InScanParameters)
 {
 	TArray<FLidarPoint> ScanResults{};
 

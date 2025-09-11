@@ -3,9 +3,6 @@
 #include "CoreMinimal.h"
 #include "Sensors/LiDAR/LidarStrategy.h"
 
-// Forward declarations
-class ULidarSensor;
-
 namespace uesensors {
 namespace lidar {
 
@@ -15,23 +12,19 @@ public:
 	RayTracingStrategy();
 	~RayTracingStrategy();
 
-	TArray<FLidarPoint> ExecuteScan(const ULidarSensor& LidarSensor) override;
+	TArray<FLidarPoint> ExecuteScan(const UWorld* World, const FLidarScanParameters& InScanParameters) override;
 
 private:
 	void PostOpaqueRender(FPostOpaqueRenderParameters& Parameters);
 
 private:
+	IRendererModule& Renderer;
 	FDelegateHandle PostOpaqueRenderDelegate{};
-	
-	FVector SensorLocation{ 0.0, 0.0, 0.0 };
-	FQuat SensorRotation{ 0.0, 0.0, 0.0, 0.0 };
-	TArray<FVector3f> SampleDirections{};
-	int32 NumSamples{ 0 };
-	float MinRange{ 0.0F };
-	float MaxRange{ 0.0F };
 
-	TArray<FLidarPoint> ScanResults{};
-	TUniquePtr<FRHIGPUBufferReadback> ScanResultsReadback{};
+	FCriticalSection ScanCS{};
+	FLidarScanParameters ScanParameters{};
+	TArray<FLidarPoint> RTScanResults{};
+	TUniquePtr<FRHIGPUBufferReadback> RTScanResultsReadback{};
 	bool bReadbackInFlight{ false };
 };
 

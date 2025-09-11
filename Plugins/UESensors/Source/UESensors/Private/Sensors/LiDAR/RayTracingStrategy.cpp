@@ -4,80 +4,91 @@
 #include "Runtime/Renderer/Private/ScenePrivate.h"
 #include "RenderGraphBuilder.h"
 
-// UESensors
-#include "Sensors/LiDAR/LidarSensor.h"
-
 // UESensorShaders
 #include "LiDAR/LidarShaders.h"
+
+DECLARE_LOG_CATEGORY_EXTERN(LogLiDARSensor, Log, All);
 
 namespace uesensors {
 namespace lidar {
 
 RayTracingStrategy::RayTracingStrategy()
+	: Renderer{ FModuleManager::LoadModuleChecked<IRendererModule>("Renderer") }
 {
 	// Register the delegate
 	if (!PostOpaqueRenderDelegate.IsValid())
 	{
-		IRendererModule& Renderer{ FModuleManager::LoadModuleChecked<IRendererModule>("Renderer") };
-
 		PostOpaqueRenderDelegate = Renderer.RegisterPostOpaqueRenderDelegate(
 			FPostOpaqueRenderDelegate::CreateRaw(this, &RayTracingStrategy::PostOpaqueRender)
 		);
 	}
 
 	// Create the GPU buffer readback
-	ScanResultsReadback = MakeUnique<FRHIGPUBufferReadback>(TEXT("ScanResultsReadback"));
+	RTScanResultsReadback = MakeUnique<FRHIGPUBufferReadback>(TEXT("RTScanResultsReadback"));
 }
+
 RayTracingStrategy::~RayTracingStrategy()
 {
 	// Remove the delegate
 	if (PostOpaqueRenderDelegate.IsValid())
 	{
-		IRendererModule& Renderer{ FModuleManager::LoadModuleChecked<IRendererModule>("Renderer") };
-
 		Renderer.RemovePostOpaqueRenderDelegate(PostOpaqueRenderDelegate);
+		PostOpaqueRenderDelegate.Reset();
 	}
+
+	// Flush all rendering command before destruction such that
+	// any render commands in flight do not reference a dangling this pointer
+	FlushRenderingCommands();
 }
 
-TArray<FLidarPoint> RayTracingStrategy::ExecuteScan(const ULidarSensor& LidarSensor)
+TArray<FLidarPoint> RayTracingStrategy::ExecuteScan(const UWorld* World, const FLidarScanParameters& InScanParameters)
 {
-	// Update the world location and rotation for the sensor
-	SensorLocation = LidarSensor.GetComponentLocation();
-	SensorRotation = LidarSensor.GetComponentQuat();
+	TArray<FLidarPoint> ScanResults{};
 
-	// Update the directions in which to perform the scan
-	SampleDirections = LidarSensor.GetSampleDirections();
+	// Copy the scan parameters for later use in PostOpaqueRender
+	ScanParameters = InScanParameters;
 
-	// Update the number of samples
-	NumSamples = SampleDirections.Num();
+	// Lock the scan results such that PostOpaqueRender does not write to it
+	// while it is being read from
+	{
+		FScopeLock Lock(&ScanCS);
 
-	// Update the range of the LiDAR
-	MinRange = LidarSensor.MinRange;
-	MaxRange = LidarSensor.MaxRange;
-	
-	// Remove all points that did failed to hit anything in a single pass
-	// to create a clean set of results
-	ScanResults.RemoveAll(
-		[](const FLidarPoint& Point)
-		{
-			return !Point.bHit;
-		}
-	);
-	
-	// Return the scan results; this will be updated in PostOpaqueRender
+		// Copy the scan results from PostOpaqueRender
+		ScanResults = RTScanResults;
+	}
+
 	return ScanResults;
 }
 
 void RayTracingStrategy::PostOpaqueRender(FPostOpaqueRenderParameters& Parameters)
 {
-	// Since PostOpaqueRender is likely to be called far more frequently than is ExecuteScan,
-	// it is possible for the LiDAR parameters to be in an uninitialized state, in which case
-	// the scan should not be performed
-	if (SampleDirections.IsEmpty() || NumSamples <= 0)
+	// Create variables for the render thread to use safely
+	FVector3f SensorLocation{ 0.0F, 0.0F, 0.0F };
+	FVector4f SensorRotation{ 0.0F, 0.0F, 0.0F, 0.0F };
+	TArrayView<FVector3f> SampleDirections{};
+	int32 NumSamples{ 0 };
+	float MinRange{ 0.0F };
+	float MaxRange{ 0.0F };
+
+	// Lock the cached scan parameters such that
+	// they are not altered by ExecuteScan while being read from
 	{
-		return;
+		FScopeLock Lock(&ScanCS);
+
+		// Set the render thread variables
+		SensorLocation = FVector3f{ ScanParameters.SensorLocation };
+		SensorRotation = FVector4f{ ScanParameters.SensorRotation };
+		SampleDirections = MakeArrayView(ScanParameters.SampleDirections);
+		MinRange = ScanParameters.MinRange;
+		MaxRange = ScanParameters.MaxRange;
 	}
-	
+
+	// Since PostOpaqueRender is likely to be called far more frequently than is ExecuteScan,
+	// it is entirely possible for the scan parameters to be in an uninitialized but valid state after
+	// the strategy has just been constructed, in which case the scan should not be performed
+	NumSamples = SampleDirections.Num();
+	if (NumSamples <= 0) { return; }
+
 	FRDGBuilder* GraphBuilder{ Parameters.GraphBuilder };
 
 	// Allocate shader parameters
@@ -99,25 +110,23 @@ void RayTracingStrategy::PostOpaqueRender(FPostOpaqueRenderParameters& Parameter
 	);
 
 	// Configure shader input parameters (except for the TLAS, which must be configured in the actual ray tracing pass)
-	ShaderParameters->SensorLocation = FVector3f{ SensorLocation };
-	ShaderParameters->SensorRotation = FVector4f{ FVector4{
-		SensorRotation.X, SensorRotation.Y, SensorRotation.Z, SensorRotation.W
-	} };
+	ShaderParameters->SensorLocation = SensorLocation;
+	ShaderParameters->SensorRotation = SensorRotation;
 	ShaderParameters->SampleDirections = GraphBuilder->CreateSRV(SampleDirectionsBuffer);
 	ShaderParameters->NumSamples = NumSamples;
 	ShaderParameters->MinRange = MinRange;
 	ShaderParameters->MaxRange = MaxRange;
 
-	// Create buffer for GPU scan results
-	FRDGBufferRef GPUScanResultsBuffer{
+	// Create buffer for ray tracing scan results
+	FRDGBufferRef RTScanResultsBuffer{
 		GraphBuilder->CreateBuffer(
 			FRDGBufferDesc::CreateStructuredDesc(sizeof(LidarPoint32Aligned), NumSamples),
-			TEXT("GPUScanResults")
+			TEXT("RTScanResults")
 		)
 	};
 
 	// Configure shader output parameters
-	ShaderParameters->GPUScanResults = GraphBuilder->CreateUAV(GPUScanResultsBuffer);
+	ShaderParameters->RTScanResults = GraphBuilder->CreateUAV(RTScanResultsBuffer);
 
 	// Add ray trace dispatch pass
 	GraphBuilder->AddPass(
@@ -195,15 +204,15 @@ void RayTracingStrategy::PostOpaqueRender(FPostOpaqueRenderParameters& Parameter
 
 	// Add GPU buffer readback pass
 	AddReadbackBufferPass(
-		*GraphBuilder, RDG_EVENT_NAME("LidarRTReadback"), GPUScanResultsBuffer,
-		[this, GPUScanResultsBuffer, ShaderParameters](FRHICommandListImmediate& RHICmdList)
+		*GraphBuilder, RDG_EVENT_NAME("LidarRTReadback"), RTScanResultsBuffer,
+		[this, RTScanResultsBuffer, ShaderParameters](FRHICommandListImmediate& RHICmdList)
 		{
 			// Only request a readback if one is not already in flight
 			if (!bReadbackInFlight)
 			{
 				// Request a readback
 				const uint32 NumBytes{ static_cast<uint32>(sizeof(LidarPoint32Aligned)) * ShaderParameters->NumSamples };
-				ScanResultsReadback->EnqueueCopy(RHICmdList, GPUScanResultsBuffer->GetRHI(), NumBytes);
+				RTScanResultsReadback->EnqueueCopy(RHICmdList, RTScanResultsBuffer->GetRHI(), NumBytes);
 
 				// Mark that a readback is now in flight
 				bReadbackInFlight = true;
@@ -217,29 +226,44 @@ void RayTracingStrategy::PostOpaqueRender(FPostOpaqueRenderParameters& Parameter
 		[this, ShaderParameters](FRHICommandListImmediate& RHICmdList)
 		{
 			// Only attempt to copy from the readback if it is ready
-			if (bReadbackInFlight && ScanResultsReadback->IsReady())
+			if (bReadbackInFlight && RTScanResultsReadback->IsReady())
 			{
 				// Get the raw data from the readback
-				const uint32 NumBytes{ static_cast<uint32>(ScanResultsReadback->GetGPUSizeBytes()) };
+				const uint32 NumBytes{ static_cast<uint32>(RTScanResultsReadback->GetGPUSizeBytes()) };
 				const LidarPoint32Aligned* Src{
-					static_cast<const LidarPoint32Aligned*>(ScanResultsReadback->Lock(NumBytes))
+					static_cast<const LidarPoint32Aligned*>(RTScanResultsReadback->Lock(NumBytes))
 				};
 
-				// Initialize as many points as there are samples; this is an overestimation since samples can miss
-				// (i.e. not hit anything), but this is preferable to multiple memory reallocations
-				ScanResults.SetNum(ShaderParameters->NumSamples);
-
-				// Fill scan results with readback data
-				for (int32 i{ 0 }; i < ScanResults.Num(); ++i)
+				// Lock the scan results such that ExecuteScan does not attempt to read from it
+				// while it is being written to
 				{
-					ScanResults[i].XYZ = Src[i].XYZ;
-					ScanResults[i].Intensity = Src[i].Intensity;
-					ScanResults[i].RGB =  FColor{ Src[i].RGB };
-					ScanResults[i].bHit = (Src[i].bHit != 0);
+					FScopeLock Lock(&ScanCS);
+
+					// Initialize as many points as there are samples; this is an overestimation since samples can miss
+					// (i.e. not hit anything), but this is preferable to multiple memory reallocations
+					RTScanResults.SetNum(ShaderParameters->NumSamples);
+
+					// Fill scan results with readback data
+					for (int32 i{ 0 }; i < RTScanResults.Num(); ++i)
+					{
+						RTScanResults[i].XYZ = Src[i].XYZ;
+						RTScanResults[i].Intensity = Src[i].Intensity;
+						RTScanResults[i].RGB = FColor{ Src[i].RGB };
+						RTScanResults[i].bHit = (Src[i].bHit != 0);
+					}
+
+					// Remove all points that did failed to hit anything in a single pass
+					// to create a clean set of valid results
+					RTScanResults.RemoveAll(
+						[](const FLidarPoint& Point)
+						{
+							return !Point.bHit;
+						}
+					);
 				}
 
 				// Mark that the readback has been completed and is ready for another iteration
-				ScanResultsReadback->Unlock();
+				RTScanResultsReadback->Unlock();
 				bReadbackInFlight = false;
 			}
 		}

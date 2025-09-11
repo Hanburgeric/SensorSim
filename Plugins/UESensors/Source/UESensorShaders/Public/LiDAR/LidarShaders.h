@@ -30,7 +30,7 @@ class UESENSORSHADERS_API FLidarRayGenShader : public FGlobalShader
 		SHADER_PARAMETER(float, MinRange)
 		SHADER_PARAMETER(float, MaxRange)
 
-		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<LidarPoint32Aligned>, GPUScanResults)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<LidarPoint32Aligned>, RTScanResults)
 	END_SHADER_PARAMETER_STRUCT()
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)

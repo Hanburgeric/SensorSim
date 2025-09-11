@@ -70,17 +70,23 @@ private:
 
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	float MinRange{ 150.0F };
+	bool bDebugDrawScanData{ false };
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "bDebugDrawScanData"))
+	float DebugPointSize{ 1.0F };
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	float MaxRange{ 500000.0F };
+	float MinRange{ 100.0F };
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float MaxRange{ 100000.0F };
 
 private:
 	UPROPERTY(EditAnywhere, BlueprintGetter = "GetHorizontalFieldOfView", BlueprintSetter = "SetHorizontalFieldOfView", meta = (ClampMin = "0.0", ClampMax = "360.0"))
 	float HorizontalFieldOfView{ 90.0F };
 
 	UPROPERTY(EditAnywhere, BlueprintGetter = "GetHorizontalResolution", BlueprintSetter = "SetHorizontalResolution", meta = (ClampMin = "0.01"))
-	float HorizontalResolution{ 2.0F };
+	float HorizontalResolution{ 1.0F };
 
 	UPROPERTY(EditAnywhere, BlueprintGetter = "GetVerticalFieldOfView", BlueprintSetter = "SetVerticalFieldOfView", meta = (ClampMin = "0.0", ClampMax = "360.0"))
 	float VerticalFieldOfView{ 45.0F };

@@ -29,8 +29,26 @@ struct FLidarPoint
 	bool bHit{ false };
 };
 
-// Forward declarations
-class ULidarSensor;
+USTRUCT(BlueprintType)
+struct FLidarScanParameters
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FVector3f SensorLocation{ 0.0F, 0.0F, 0.0F };
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FVector4f SensorRotation{ 0.0F, 0.0F, 0.0F, 1.0F };
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TArray<FVector3f> SampleDirections{};
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float MinRange{ 0.0F };
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float MaxRange{ 0.0F };
+};
 
 namespace uesensors {
 namespace lidar {
@@ -40,7 +58,7 @@ class Strategy
 public:
 	virtual ~Strategy() = default;
 
-	virtual TArray<FLidarPoint> ExecuteScan(const ULidarSensor& LidarSensor) = 0;
+	virtual TArray<FLidarPoint> ExecuteScan(const UWorld* World, const FLidarScanParameters& InScanParameters) = 0;
 };
 
 } // namespace lidar
