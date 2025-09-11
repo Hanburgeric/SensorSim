@@ -2,6 +2,7 @@
 #include "/Engine/Private/RayTracing/RayTracingCommon.ush"
 
 // Input parameters
+float3 PreViewTranslation;
 RaytracingAccelerationStructure TLAS;
 float3 SensorLocation;
 float4 SensorRotation;
@@ -67,10 +68,10 @@ void LidarRayGen()
     
 	// Configure the ray
     RayDesc Ray;
-    Ray.Origin = SensorLocation + WorldDirection * MinRange;
+    Ray.Origin = SensorLocation + PreViewTranslation;
     Ray.Direction = WorldDirection;
-    Ray.TMin = 0.0F;
-    Ray.TMax = max(0.0F, MaxRange - MinRange);
+    Ray.TMin = MinRange;
+    Ray.TMax = MaxRange;
     
 	// Zero-initialize the payload
     RayPayload Payload;
@@ -93,7 +94,7 @@ void LidarRayGen()
 
 	// Write results to output parameters
     LidarPoint32Aligned TraceResult;
-    TraceResult.XYZ = Payload.XYZ;
+    TraceResult.XYZ = Payload.XYZ - PreViewTranslation;
     TraceResult.Intensity = Payload.Intensity;
     TraceResult.RGB = Payload.RGB;
     TraceResult.bHit = Payload.bHit ? 1U : 0U;

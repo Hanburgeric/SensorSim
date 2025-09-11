@@ -21,6 +21,7 @@ class UESENSORSHADERS_API FLidarRayGenShader : public FGlobalShader
 	SHADER_USE_ROOT_PARAMETER_STRUCT(FLidarRayGenShader, FGlobalShader)
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER(FVector3f, PreViewTranslation)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(RaytracingAccelerationStructure, TLAS)
 		SHADER_PARAMETER(FVector3f, SensorLocation)
 		SHADER_PARAMETER(FVector4f, SensorRotation)

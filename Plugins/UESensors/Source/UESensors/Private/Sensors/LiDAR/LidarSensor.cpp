@@ -182,7 +182,8 @@ void ULidarSensor::ExecuteScan_Implementation()
 	{
 		for (const FLidarPoint& Point : ScanData)
 		{
-			DrawDebugSphere(World, FVector{ Point.XYZ }, 1.0F, 4, Point.RGB);
+			//UE_LOG(LogLiDARSensor, Warning, TEXT("Lidar Point: (%0.3f,%0.3f,%0.3f)"), Point.XYZ.X, Point.XYZ.Y, Point.XYZ.Z);
+			//DrawDebugSphere(World, FVector{ Point.XYZ }, 10.0F, 4, Point.RGB);
 		}
 	}
 }
