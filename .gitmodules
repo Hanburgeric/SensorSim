@@ -1,0 +1,3 @@
+[submodule "Plugins/UESensors"]
+	path = Plugins/UESensors
+	url = https://github.com/Hanburgeric/UESensors.git
